@@ -670,8 +670,13 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
   const all = loadEvents();
   if (editingEventId) {
     const idx = all.findIndex((e) => e.id === editingEventId);
-    if (idx !== -1) all[idx] = { ...all[idx], ...ev, id: editingEventId };
-    else all.push(ev);
+    if (idx !== -1) {
+      const old = all[idx];
+      const locUnchanged = (old.stadium || "") === stadium && (old.address || old.city || "") === address;
+      all[idx] = { ...old, ...ev, id: editingEventId, lat: locUnchanged ? old.lat : null, lng: locUnchanged ? old.lng : null };
+    } else {
+      all.push(ev);
+    }
   } else {
     all.push(ev);
   }
@@ -739,9 +744,8 @@ const fullEmpty    = document.getElementById("full-empty");
 const mapEmpty     = document.getElementById("map-empty");
 const mapContainer = document.getElementById("events-map");
 
-let stadiumMapInstance  = null;
-let stadiumMapReady     = false;
-let stadiumClusterGroup = null;
+let stadiumMapInstance = null;
+let stadiumMapReady    = false;
 
 filterSport?.addEventListener("change", renderStadiumsTab);
 filterYear?.addEventListener("change",  renderStadiumsTab);
@@ -799,35 +803,20 @@ function renderStadiumMap(events) {
       maxZoom: 19,
     }).addTo(stadiumMapInstance);
     stadiumMapReady = true;
-  } else if (stadiumClusterGroup) {
-    stadiumMapInstance.removeLayer(stadiumClusterGroup);
+  } else {
+    stadiumMapInstance.eachLayer((l) => { if (l instanceof window.L.Marker) stadiumMapInstance.removeLayer(l); });
   }
-
-  stadiumClusterGroup = window.L.markerClusterGroup ? window.L.markerClusterGroup({
-    maxClusterRadius: 20,
-    iconCreateFunction(cluster) {
-      const n = cluster.getChildCount();
-      return window.L.divIcon({
-        html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 38" width="26" height="38"><path d="M13 0C5.82 0 0 5.82 0 13c0 9.75 13 25 13 25S26 22.75 26 13C26 5.82 20.18 0 13 0z" fill="#2577b8" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/><text x="13" y="17" text-anchor="middle" fill="white" font-size="10" font-weight="bold" font-family="sans-serif">${n}</text></svg>`,
-        className: "cluster-pin-icon",
-        iconSize: [26, 38],
-        iconAnchor: [13, 38],
-      });
-    },
-  }) : null;
-  const stadiumTarget = stadiumClusterGroup || stadiumMapInstance;
 
   const bounds = [];
   stadiums.forEach(({ stadium, address, lat, lng, events: evts }) => {
     const lines = [...evts].sort((a, b) => (b.date || "").localeCompare(a.date || ""))
       .map((e) => `<b>${esc(e.homeTeam)} ${scoreDisplay(e)} ${esc(e.awayTeam)}</b><br>${sportLabel(e.sport)} · ${e.date ? formatDate(e.date) : "Date unknown"}`)
       .join("<hr style='margin:5px 0'>");
-    window.L.marker([lat, lng]).addTo(stadiumTarget)
+    window.L.marker([lat, lng]).addTo(stadiumMapInstance)
       .bindPopup(`<b>${esc(stadium)}</b>${address ? `<br><em>${esc(address)}</em>` : ""}<hr style='margin:5px 0'>${lines}`);
     bounds.push([lat, lng]);
   });
 
-  if (stadiumClusterGroup) stadiumMapInstance.addLayer(stadiumClusterGroup);
   if (bounds.length === 1) stadiumMapInstance.setView(bounds[0], 14);
   else stadiumMapInstance.fitBounds(bounds, { padding: [40, 40] });
   window.requestAnimationFrame(() => stadiumMapInstance.invalidateSize());
