@@ -227,7 +227,7 @@ function loadEvents() {
       homeScore: typeof e.homeScore === "number" ? e.homeScore : null,
       awayScore: typeof e.awayScore === "number" ? e.awayScore : null,
       stadium:   typeof e.stadium === "string" ? e.stadium : "",
-      city:      typeof e.city === "string" ? e.city : "",
+      address:   typeof e.address === "string" ? e.address : (typeof e.city === "string" ? e.city : ""),
       side:      ["home","away","neutral"].includes(e.side) ? e.side : "neutral",
       // scorers: array of {name, team, minute} — or empty array
       scorers:     Array.isArray(e.scorers) ? e.scorers : [],
@@ -301,7 +301,7 @@ function eventItemHTML(e) {
       <div class="event-info">
         <span class="event-title">${esc(e.homeTeam || "?")} ${scoreDisplay(e)} ${esc(e.awayTeam || "?")}</span>
         <span class="event-meta">${sportLabel(e.sport)}${e.competition ? ` · ${esc(e.competition)}` : ""} · ${e.date ? formatDate(e.date) : '<span class="unknown-badge">Date unknown</span>'} · ${sideLabel(e.side)}</span>
-        <span class="event-meta">${e.stadium ? esc(e.stadium) : "Venue unknown"}${e.city ? `, ${esc(e.city)}` : ""} · ${resultLine(e)}${e.penalties ? ` (pens ${e.penalties.home}–${e.penalties.away})` : ""}</span>
+        <span class="event-meta">${e.stadium ? esc(e.stadium) : "Venue unknown"}${e.address ? ` · ${esc(e.address)}` : ""} · ${resultLine(e)}${e.penalties ? ` (pens ${e.penalties.home}–${e.penalties.away})` : ""}</span>
         ${scorerLine(e)}
         ${lineupLine(e)}
         ${e.notes ? `<span class="event-notes">${esc(e.notes)}</span>` : ""}
@@ -331,7 +331,7 @@ const logAwayLocCity    = document.getElementById("log-away-loc-city");
 const logAwayLocState   = document.getElementById("log-away-loc-state");
 const logAwayLocCountry = document.getElementById("log-away-loc-country");
 const logStadium   = document.getElementById("log-stadium");
-const logCity      = document.getElementById("log-city");
+const logAddress   = document.getElementById("log-address");
 const logCompetition    = document.getElementById("log-competition");
 const logPenaltiesCheck = document.getElementById("log-penalties-check");
 const penaltiesWrap     = document.getElementById("penalties-wrap");
@@ -427,8 +427,8 @@ function loadEventIntoForm(ev) {
   if (logAwayTeam)  logAwayTeam.value  = ev.awayTeam  || "";
   if (logHomeScore) logHomeScore.value = ev.homeScore != null ? ev.homeScore : "";
   if (logAwayScore) logAwayScore.value = ev.awayScore != null ? ev.awayScore : "";
-  if (logStadium)   logStadium.value   = ev.stadium   || "";
-  if (logCity)      logCity.value      = ev.city      || "";
+  if (logStadium)   logStadium.value   = ev.stadium         || "";
+  if (logAddress)   logAddress.value   = ev.address || ev.city || "";
   if (logCompetition) logCompetition.value = ev.competition || "";
 
   // pre-fill team locations from saved data
@@ -611,7 +611,7 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
   const homeScore   = homeScoreRaw !== "" && homeScoreRaw != null ? (parseInt(homeScoreRaw, 10) || 0) : null;
   const awayScore   = awayScoreRaw !== "" && awayScoreRaw != null ? (parseInt(awayScoreRaw, 10) || 0) : null;
   const stadium     = logStadium?.value.trim() || "";
-  const city        = logCity?.value.trim() || "";
+  const address     = logAddress?.value.trim() || "";
   const side        = logSide?.value || "neutral";
   const scorers     = sport === "soccer" ? [...stagedScorers] : [];
   const competition = sport === "soccer" ? (logCompetition?.value.trim() || "") : "";
@@ -621,7 +621,7 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
     : null;
   const notes       = logNotes?.value.trim() || "";
 
-  if (!homeTeam && !awayTeam && !stadium) {
+  if (!homeTeam && !awayTeam && !stadium && !address) {
     alert("Add at least one team or a stadium so you can identify this event.");
     return;
   }
@@ -630,7 +630,7 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
     id: newId(), date, sport, homeTeam, awayTeam,
     homeScore: isNaN(homeScore) ? 0 : homeScore,
     awayScore: isNaN(awayScore) ? 0 : awayScore,
-    stadium, city, side, scorers, competition, penalties,
+    stadium, address, side, scorers, competition, penalties,
     homeLineup: [...stagedHomeLineup],
     awayLineup: [...stagedAwayLineup],
     notes,
@@ -683,7 +683,7 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
   if (logHomeScore) logHomeScore.value = "";
   if (logAwayScore) logAwayScore.value = "";
   if (logStadium)   logStadium.value   = "";
-  if (logCity)      logCity.value      = "";
+  if (logAddress)   logAddress.value   = "";
   editingEventId = null;
   if (logSubmitBtn) logSubmitBtn.textContent = "Log Event";
   editCancelBtn.hidden = true;
@@ -777,8 +777,8 @@ function renderStadiumMap(events) {
   const withCoords = events.filter((e) => typeof e.lat === "number" && typeof e.lng === "number");
   const byStadium = new Map();
   withCoords.forEach((e) => {
-    const key = `${e.stadium}|||${e.city}`;
-    if (!byStadium.has(key)) byStadium.set(key, { stadium: e.stadium, city: e.city, lat: e.lat, lng: e.lng, events: [] });
+    const key = `${e.stadium}|||${e.address || e.city || ""}`;
+    if (!byStadium.has(key)) byStadium.set(key, { stadium: e.stadium, address: e.address || e.city || "", lat: e.lat, lng: e.lng, events: [] });
     byStadium.get(key).events.push(e);
   });
   const stadiums = [...byStadium.values()];
@@ -807,12 +807,12 @@ function renderStadiumMap(events) {
   const stadiumTarget = stadiumClusterGroup || stadiumMapInstance;
 
   const bounds = [];
-  stadiums.forEach(({ stadium, city, lat, lng, events: evts }) => {
+  stadiums.forEach(({ stadium, address, lat, lng, events: evts }) => {
     const lines = [...evts].sort((a, b) => (b.date || "").localeCompare(a.date || ""))
       .map((e) => `<b>${esc(e.homeTeam)} ${scoreDisplay(e)} ${esc(e.awayTeam)}</b><br>${sportLabel(e.sport)} · ${e.date ? formatDate(e.date) : "Date unknown"}`)
       .join("<hr style='margin:5px 0'>");
     window.L.marker([lat, lng]).addTo(stadiumTarget)
-      .bindPopup(`<b>${esc(stadium)}</b><br><em>${esc(city)}</em><hr style='margin:5px 0'>${lines}`);
+      .bindPopup(`<b>${esc(stadium)}</b>${address ? `<br><em>${esc(address)}</em>` : ""}<hr style='margin:5px 0'>${lines}`);
     bounds.push([lat, lng]);
   });
 
@@ -1079,9 +1079,9 @@ function renderTeamsMap() {
 }
 
 // ── Geocoding ─────────────────────────────────────────
-async function geocodeStadium(stadium, city) {
+async function geocodeStadium(stadium, address) {
   try {
-    const q = encodeURIComponent(`${stadium} ${city}`);
+    const q = encodeURIComponent(address ? `${stadium} ${address}` : stadium);
     const res = await fetch(
       `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`,
       { headers: { Accept: "application/json", "User-Agent": "LifeTrackerApp/1.0" } }
@@ -1096,12 +1096,12 @@ async function geocodeStadium(stadium, city) {
 async function geocodePending() {
   if (!currentUser) return;
   const events  = loadEvents();
-  const pending = events.filter((e) => e.stadium && e.city && e.lat === null);
+  const pending = events.filter((e) => e.stadium && (e.address || e.city) && e.lat === null);
   if (!pending.length) return;
   let changed = false;
   for (const ev of pending) {
     await new Promise((r) => setTimeout(r, 1200));
-    const coords = await geocodeStadium(ev.stadium, ev.city);
+    const coords = await geocodeStadium(ev.stadium, ev.address || ev.city || "");
     if (coords) { ev.lat = coords.lat; ev.lng = coords.lng; changed = true; }
   }
   if (changed) {
