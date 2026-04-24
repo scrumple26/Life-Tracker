@@ -568,6 +568,37 @@ textarea { resize: vertical; }
 .team-game-list { display: grid; gap: 4px; padding: 0; }
 .team-game-line { font-size: 0.82rem; color: var(--muted); }
 
+.team-location {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.team-loc-display {
+  font-size: 0.82rem;
+  color: var(--muted);
+  flex: 1;
+}
+.team-loc-form {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.team-loc-form[hidden] { display: none; }
+.team-loc-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+.team-loc-actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* ── Utility ─────────────────────────────────────────── */
 .muted { color: var(--muted); font-size: 0.875rem; }
 .small { font-size: 0.8rem; }

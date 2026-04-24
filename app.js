@@ -604,6 +604,37 @@ function renderScorersTab() {
   }).join("");
 }
 
+// ── Team locations storage ────────────────────────────
+function teamLocsKey() { return currentUser ? `life-tracker-team-locs-${currentUser.uid}` : null; }
+
+function loadTeamLocs() {
+  try {
+    const key = teamLocsKey();
+    if (!key) return {};
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveTeamLocs(locs) {
+  const key = teamLocsKey();
+  if (key) localStorage.setItem(key, JSON.stringify(locs));
+}
+
+async function geocodeTeamLocation(city, state, country) {
+  try {
+    const q = encodeURIComponent([city, state, country].filter(Boolean).join(", "));
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`,
+      { headers: { Accept: "application/json", "User-Agent": "LifeTrackerApp/1.0" } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!Array.isArray(data) || !data.length) return null;
+    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+  } catch { return null; }
+}
+
 // ── Teams tab ─────────────────────────────────────────
 const teamsList        = document.getElementById("teams-list");
 const teamsEmpty       = document.getElementById("teams-empty");
@@ -626,28 +657,26 @@ document.querySelectorAll(".view-btn").forEach((btn) => {
   });
 });
 
-function renderTeamsTab() {
+function aggregateTeams() {
   const events = loadEvents();
-
-  // Aggregate teams
+  const locs   = loadTeamLocs();
   const byTeam = new Map();
   events.forEach((e) => {
     ["home", "away"].forEach((side) => {
       const name = side === "home" ? e.homeTeam : e.awayTeam;
       if (!name) return;
       const key = name.toLowerCase().trim();
-      if (!byTeam.has(key)) byTeam.set(key, { name, games: [], lat: null, lng: null, stadium: "", city: "" });
-      const entry = byTeam.get(key);
-      entry.games.push({ date: e.date, match: `${e.homeTeam} ${e.homeScore}–${e.awayScore} ${e.awayTeam}`, sport: e.sport, stadium: e.stadium, city: e.city, lat: e.lat, lng: e.lng });
-      // Use first available geocoded location for map pin
-      if (!entry.lat && typeof e.lat === "number") {
-        entry.lat = e.lat; entry.lng = e.lng;
-        entry.stadium = e.stadium; entry.city = e.city;
-      }
+      if (!byTeam.has(key)) byTeam.set(key, { key, name, games: [] });
+      byTeam.get(key).games.push({ date: e.date, match: `${e.homeTeam} ${e.homeScore}–${e.awayScore} ${e.awayTeam}`, sport: e.sport, stadium: e.stadium });
     });
   });
+  return [...byTeam.values()]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((t) => ({ ...t, loc: locs[t.key] || null }));
+}
 
-  const teams = [...byTeam.values()].sort((a, b) => a.name.localeCompare(b.name));
+function renderTeamsTab() {
+  const teams = aggregateTeams();
 
   if (!teams.length) {
     teamsList.innerHTML = "";
@@ -655,16 +684,41 @@ function renderTeamsTab() {
   } else {
     teamsEmpty.hidden = true;
     teamsList.innerHTML = teams.map((t) => {
+      const loc = t.loc;
+      const locText = loc
+        ? [loc.city, loc.state, loc.country].filter(Boolean).join(", ")
+        : "";
+      const locHtml = locText
+        ? `<div class="team-location">
+            <span class="team-loc-display">📍 ${esc(locText)}</span>
+            <button class="btn btn-sm" type="button" data-action="edit-team-loc" data-team-key="${esc(t.key)}">Edit</button>
+          </div>`
+        : `<div class="team-location">
+            <button class="btn btn-sm" type="button" data-action="edit-team-loc" data-team-key="${esc(t.key)}">+ Add location</button>
+          </div>`;
+      const formHtml = `
+        <form class="team-loc-form" data-team-key="${esc(t.key)}" hidden>
+          <div class="team-loc-inputs">
+            <input class="team-loc-city" type="text" placeholder="City" maxlength="80" value="${esc(loc?.city || "")}" />
+            <input class="team-loc-state" type="text" placeholder="State (optional)" maxlength="80" value="${esc(loc?.state || "")}" />
+            <input class="team-loc-country" type="text" placeholder="Country" maxlength="80" value="${esc(loc?.country || "")}" />
+          </div>
+          <div class="team-loc-actions">
+            <button type="submit" class="btn btn-sm btn-primary">Save</button>
+            <button type="button" class="btn btn-sm" data-action="cancel-team-loc">Cancel</button>
+          </div>
+        </form>`;
       const gameLines = [...t.games]
         .sort((a, b) => b.date.localeCompare(a.date))
         .map((g) => `<li class="team-game-line">${esc(g.match)} · ${formatDate(g.date)} · ${esc(g.stadium)}</li>`)
         .join("");
       return `
-        <li class="team-entry">
+        <li class="team-entry" data-team-key="${esc(t.key)}">
           <div class="team-entry-head">
             <span class="team-entry-name">${esc(t.name)}</span>
             <span class="team-entry-count">${t.games.length} ${t.games.length === 1 ? "game" : "games"}</span>
           </div>
+          ${locHtml}${formHtml}
           <ul class="team-game-list">${gameLines}</ul>
         </li>`;
     }).join("");
@@ -673,23 +727,44 @@ function renderTeamsTab() {
   if (teamsView === "map") renderTeamsMap();
 }
 
+// Team location edit — event delegation
+teamsList?.addEventListener("click", (e) => {
+  const editBtn   = e.target.closest("[data-action='edit-team-loc']");
+  const cancelBtn = e.target.closest("[data-action='cancel-team-loc']");
+  if (editBtn) {
+    const key  = editBtn.dataset.teamKey;
+    const form = teamsList.querySelector(`.team-loc-form[data-team-key="${key}"]`);
+    if (form) form.hidden = false;
+  }
+  if (cancelBtn) {
+    const form = cancelBtn.closest(".team-loc-form");
+    if (form) form.hidden = true;
+  }
+});
+
+teamsList?.addEventListener("submit", async (e) => {
+  const form = e.target.closest(".team-loc-form");
+  if (!form) return;
+  e.preventDefault();
+  const key     = form.dataset.teamKey;
+  const city    = form.querySelector(".team-loc-city")?.value.trim() || "";
+  const state   = form.querySelector(".team-loc-state")?.value.trim() || "";
+  const country = form.querySelector(".team-loc-country")?.value.trim() || "";
+  if (!city && !country) { form.hidden = true; return; }
+
+  const locs = loadTeamLocs();
+  locs[key] = { city, state, country, lat: null, lng: null };
+
+  const coords = await geocodeTeamLocation(city, state, country);
+  if (coords) { locs[key].lat = coords.lat; locs[key].lng = coords.lng; }
+  saveTeamLocs(locs);
+  renderTeamsTab();
+});
+
 function renderTeamsMap() {
-  const events = loadEvents();
-  const withCoords = events.filter((e) => typeof e.lat === "number" && typeof e.lng === "number");
+  const teams = aggregateTeams().filter((t) => t.loc?.lat != null);
 
-  // Group by stadium, list all teams that played there
-  const byStadium = new Map();
-  withCoords.forEach((e) => {
-    const key = `${e.stadium}|||${e.city}`;
-    if (!byStadium.has(key)) byStadium.set(key, { stadium: e.stadium, city: e.city, lat: e.lat, lng: e.lng, teams: new Set(), events: [] });
-    const entry = byStadium.get(key);
-    entry.teams.add(e.homeTeam);
-    entry.teams.add(e.awayTeam);
-    entry.events.push(e);
-  });
-  const stadiums = [...byStadium.values()];
-
-  if (!stadiums.length) {
+  if (!teams.length) {
     if (teamsMapEl) teamsMapEl.style.display = "none";
     if (teamsMapEmpty) teamsMapEmpty.hidden = false;
     return;
@@ -710,17 +785,17 @@ function renderTeamsMap() {
   }
 
   const bounds = [];
-  stadiums.forEach(({ stadium, city, lat, lng, teams, events: evts }) => {
-    const teamList = [...teams].filter(Boolean).map(esc).join(", ");
-    const lines = [...evts].sort((a, b) => b.date.localeCompare(a.date))
-      .map((e) => `<b>${esc(e.homeTeam)} ${e.homeScore}–${e.awayScore} ${esc(e.awayTeam)}</b><br>${formatDate(e.date)}`)
-      .join("<hr style='margin:5px 0'>");
-    const popup = `<b>${esc(stadium)}</b><br><em>${esc(city)}</em><br><small>${teamList}</small><hr style='margin:5px 0'>${lines}`;
-    window.L.marker([lat, lng]).addTo(teamsMapInstance).bindPopup(popup);
-    bounds.push([lat, lng]);
+  teams.forEach((t) => {
+    const locText = [t.loc.city, t.loc.state, t.loc.country].filter(Boolean).join(", ");
+    const gameLines = [...t.games].sort((a, b) => b.date.localeCompare(a.date))
+      .map((g) => `${esc(g.match)} · ${formatDate(g.date)}`)
+      .join("<br>");
+    const popup = `<b>${esc(t.name)}</b><br><em>${esc(locText)}</em><hr style='margin:5px 0'>${gameLines}`;
+    window.L.marker([t.loc.lat, t.loc.lng]).addTo(teamsMapInstance).bindPopup(popup);
+    bounds.push([t.loc.lat, t.loc.lng]);
   });
 
-  if (bounds.length === 1) teamsMapInstance.setView(bounds[0], 14);
+  if (bounds.length === 1) teamsMapInstance.setView(bounds[0], 10);
   else teamsMapInstance.fitBounds(bounds, { padding: [40, 40] });
   window.requestAnimationFrame(() => teamsMapInstance.invalidateSize());
 }
