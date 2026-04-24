@@ -230,8 +230,9 @@ function loadEvents() {
       city:      typeof e.city === "string" ? e.city : "",
       side:      ["home","away","neutral"].includes(e.side) ? e.side : "neutral",
       // scorers: array of {name, team, minute} — or empty array
-      scorers:   Array.isArray(e.scorers) ? e.scorers : [],
-      notes:     typeof e.notes === "string" ? e.notes : "",
+      scorers:     Array.isArray(e.scorers) ? e.scorers : [],
+      competition: typeof e.competition === "string" ? e.competition : "",
+      notes:       typeof e.notes === "string" ? e.notes : "",
       lat:       typeof e.lat === "number" ? e.lat : null,
       lng:       typeof e.lng === "number" ? e.lng : null,
       createdAt: typeof e.createdAt === "string" ? e.createdAt : new Date().toISOString(),
@@ -279,7 +280,7 @@ function eventItemHTML(e) {
     <li class="event-item">
       <div class="event-info">
         <span class="event-title">${esc(e.homeTeam)} ${e.homeScore}–${e.awayScore} ${esc(e.awayTeam)}</span>
-        <span class="event-meta">${sportLabel(e.sport)} · ${formatDate(e.date)} · ${sideLabel(e.side)}</span>
+        <span class="event-meta">${sportLabel(e.sport)}${e.competition ? ` · ${esc(e.competition)}` : ""} · ${formatDate(e.date)} · ${sideLabel(e.side)}</span>
         <span class="event-meta">${esc(e.stadium)}, ${esc(e.city)} · ${resultLine(e)}</span>
         ${scorerLine(e)}
         ${e.notes ? `<span class="event-notes">${esc(e.notes)}</span>` : ""}
@@ -299,8 +300,9 @@ const logHomeScore = document.getElementById("log-home-score");
 const logAwayScore = document.getElementById("log-away-score");
 const logStadium   = document.getElementById("log-stadium");
 const logCity      = document.getElementById("log-city");
-const logNotes     = document.getElementById("log-notes");
-const scorersWrap  = document.getElementById("scorers-wrap");
+const logCompetition = document.getElementById("log-competition");
+const logNotes       = document.getElementById("log-notes");
+const scorersWrap    = document.getElementById("scorers-wrap");
 const recentList   = document.getElementById("recent-list");
 const recentEmpty  = document.getElementById("recent-empty");
 
@@ -378,9 +380,10 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
   const awayScore = parseInt(logAwayScore?.value || "0", 10);
   const stadium   = logStadium?.value.trim() || "";
   const city      = logCity?.value.trim() || "";
-  const side      = logSide?.value || "neutral";
-  const scorers   = sport === "soccer" ? [...stagedScorers] : [];
-  const notes     = logNotes?.value.trim() || "";
+  const side        = logSide?.value || "neutral";
+  const scorers     = sport === "soccer" ? [...stagedScorers] : [];
+  const competition = sport === "soccer" ? (logCompetition?.value.trim() || "") : "";
+  const notes       = logNotes?.value.trim() || "";
 
   if (!homeTeam || !awayTeam || !stadium || !city) {
     alert("Please fill in both teams, stadium, and city.");
@@ -392,7 +395,7 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
     id: newId(), date, sport, homeTeam, awayTeam,
     homeScore: isNaN(homeScore) ? 0 : homeScore,
     awayScore: isNaN(awayScore) ? 0 : awayScore,
-    stadium, city, side, scorers, notes,
+    stadium, city, side, scorers, competition, notes,
     lat: null, lng: null, createdAt: new Date().toISOString(),
   };
 
@@ -407,7 +410,8 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
   if (logAwayScore) logAwayScore.value = "";
   if (logStadium)   logStadium.value   = "";
   if (logCity)      logCity.value      = "";
-  if (logNotes)     logNotes.value     = "";
+  if (logCompetition) logCompetition.value = "";
+  if (logNotes)       logNotes.value       = "";
   stagedScorers = [];
   renderStagedScorers();
 
