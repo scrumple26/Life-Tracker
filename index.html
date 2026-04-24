@@ -183,6 +183,23 @@
               Competition
               <input id="log-competition" type="text" maxlength="120" placeholder="e.g. Premier League, Champions League, World Cup" />
             </label>
+            <label class="check-inline">
+              <input id="log-penalties-check" type="checkbox" />
+              Went to penalties
+            </label>
+            <div id="penalties-wrap" hidden>
+              <p class="field-label">Penalty Shootout</p>
+              <div class="form-grid form-grid-2">
+                <label>
+                  <span id="penalties-home-label">Home</span> Penalties
+                  <input id="log-pen-home" type="number" min="0" max="99" placeholder="0" />
+                </label>
+                <label>
+                  <span id="penalties-away-label">Away</span> Penalties
+                  <input id="log-pen-away" type="number" min="0" max="99" placeholder="0" />
+                </label>
+              </div>
+            </div>
             <p class="field-label">Goal Scorers</p>
             <div class="scorer-add-row">
               <input id="scorer-name" type="text" maxlength="80" placeholder="Player name" />

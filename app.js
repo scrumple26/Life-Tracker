@@ -232,6 +232,7 @@ function loadEvents() {
       // scorers: array of {name, team, minute} — or empty array
       scorers:     Array.isArray(e.scorers) ? e.scorers : [],
       competition: typeof e.competition === "string" ? e.competition : "",
+      penalties:   e.penalties && typeof e.penalties.home === "number" ? e.penalties : null,
       notes:       typeof e.notes === "string" ? e.notes : "",
       lat:       typeof e.lat === "number" ? e.lat : null,
       lng:       typeof e.lng === "number" ? e.lng : null,
@@ -281,7 +282,7 @@ function eventItemHTML(e) {
       <div class="event-info">
         <span class="event-title">${esc(e.homeTeam)} ${e.homeScore}–${e.awayScore} ${esc(e.awayTeam)}</span>
         <span class="event-meta">${sportLabel(e.sport)}${e.competition ? ` · ${esc(e.competition)}` : ""} · ${formatDate(e.date)} · ${sideLabel(e.side)}</span>
-        <span class="event-meta">${esc(e.stadium)}, ${esc(e.city)} · ${resultLine(e)}</span>
+        <span class="event-meta">${esc(e.stadium)}, ${esc(e.city)} · ${resultLine(e)}${e.penalties ? ` (pens ${e.penalties.home}–${e.penalties.away})` : ""}</span>
         ${scorerLine(e)}
         ${e.notes ? `<span class="event-notes">${esc(e.notes)}</span>` : ""}
       </div>
@@ -300,9 +301,15 @@ const logHomeScore = document.getElementById("log-home-score");
 const logAwayScore = document.getElementById("log-away-score");
 const logStadium   = document.getElementById("log-stadium");
 const logCity      = document.getElementById("log-city");
-const logCompetition = document.getElementById("log-competition");
-const logNotes       = document.getElementById("log-notes");
-const scorersWrap    = document.getElementById("scorers-wrap");
+const logCompetition    = document.getElementById("log-competition");
+const logPenaltiesCheck = document.getElementById("log-penalties-check");
+const penaltiesWrap     = document.getElementById("penalties-wrap");
+const logPenHome        = document.getElementById("log-pen-home");
+const logPenAway        = document.getElementById("log-pen-away");
+const penaltiesHomeLabel = document.getElementById("penalties-home-label");
+const penaltiesAwayLabel = document.getElementById("penalties-away-label");
+const logNotes          = document.getElementById("log-notes");
+const scorersWrap       = document.getElementById("scorers-wrap");
 const recentList   = document.getElementById("recent-list");
 const recentEmpty  = document.getElementById("recent-empty");
 
@@ -317,10 +324,26 @@ if (logDate) logDate.value = today();
 // staged scorers for current form
 let stagedScorers = [];
 
-function updateScorersVisibility() {
-  if (scorersWrap) scorersWrap.hidden = logSport?.value !== "soccer";
+function updateSoccerFields() {
+  const isSoccer = logSport?.value === "soccer";
+  if (scorersWrap) scorersWrap.hidden = !isSoccer;
+  if (!isSoccer && logPenaltiesCheck) {
+    logPenaltiesCheck.checked = false;
+    if (penaltiesWrap) penaltiesWrap.hidden = true;
+  }
 }
-logSport?.addEventListener("change", updateScorersVisibility);
+logSport?.addEventListener("change", updateSoccerFields);
+
+logPenaltiesCheck?.addEventListener("change", () => {
+  if (penaltiesWrap) penaltiesWrap.hidden = !logPenaltiesCheck.checked;
+});
+
+function updatePenaltyLabels() {
+  if (penaltiesHomeLabel) penaltiesHomeLabel.textContent = logHomeTeam?.value.trim() || "Home";
+  if (penaltiesAwayLabel) penaltiesAwayLabel.textContent = logAwayTeam?.value.trim() || "Away";
+}
+logHomeTeam?.addEventListener("input", updatePenaltyLabels);
+logAwayTeam?.addEventListener("input", updatePenaltyLabels);
 
 function renderStagedScorers() {
   if (!scorersStaged) return;
@@ -383,6 +406,10 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
   const side        = logSide?.value || "neutral";
   const scorers     = sport === "soccer" ? [...stagedScorers] : [];
   const competition = sport === "soccer" ? (logCompetition?.value.trim() || "") : "";
+  const hasPens     = sport === "soccer" && logPenaltiesCheck?.checked;
+  const penalties   = hasPens
+    ? { home: parseInt(logPenHome?.value || "0", 10) || 0, away: parseInt(logPenAway?.value || "0", 10) || 0 }
+    : null;
   const notes       = logNotes?.value.trim() || "";
 
   if (!homeTeam || !awayTeam || !stadium || !city) {
@@ -395,7 +422,7 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
     id: newId(), date, sport, homeTeam, awayTeam,
     homeScore: isNaN(homeScore) ? 0 : homeScore,
     awayScore: isNaN(awayScore) ? 0 : awayScore,
-    stadium, city, side, scorers, competition, notes,
+    stadium, city, side, scorers, competition, penalties, notes,
     lat: null, lng: null, createdAt: new Date().toISOString(),
   };
 
@@ -410,8 +437,11 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
   if (logAwayScore) logAwayScore.value = "";
   if (logStadium)   logStadium.value   = "";
   if (logCity)      logCity.value      = "";
-  if (logCompetition) logCompetition.value = "";
-  if (logNotes)       logNotes.value       = "";
+  if (logCompetition)    logCompetition.value    = "";
+  if (logPenaltiesCheck) { logPenaltiesCheck.checked = false; if (penaltiesWrap) penaltiesWrap.hidden = true; }
+  if (logPenHome)        logPenHome.value        = "";
+  if (logPenAway)        logPenAway.value        = "";
+  if (logNotes)          logNotes.value          = "";
   stagedScorers = [];
   renderStagedScorers();
 
@@ -730,7 +760,7 @@ async function geocodePending() {
 
 // ── App init ──────────────────────────────────────────
 function initApp() {
-  updateScorersVisibility();
+  updateSoccerFields();
   renderRecentEvents();
   geocodePending();
 }
