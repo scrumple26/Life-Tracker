@@ -1090,18 +1090,27 @@ function renderTeamsMap() {
 }
 
 // ── Geocoding ─────────────────────────────────────────
-async function geocodeStadium(stadium, address) {
+async function nominatimSearch(q) {
   try {
-    const q = encodeURIComponent(address ? `${stadium} ${address}` : stadium);
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`,
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`,
       { headers: { Accept: "application/json", "User-Agent": "LifeTrackerApp/1.0" } }
     );
     if (!res.ok) return null;
     const data = await res.json();
-    if (!Array.isArray(data) || !data.length) return null;
-    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    return Array.isArray(data) && data.length ? { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) } : null;
   } catch { return null; }
+}
+
+async function geocodeStadium(stadium, address) {
+  // Address alone geocodes much more reliably than "StadiumName StreetAddress"
+  if (address) {
+    const coords = await nominatimSearch(address);
+    if (coords) return coords;
+    // If address alone fails, wait before retrying with stadium name appended
+    await new Promise((r) => setTimeout(r, 1200));
+  }
+  return nominatimSearch(stadium);
 }
 
 async function geocodePending() {
