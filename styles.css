@@ -391,6 +391,9 @@ textarea { resize: vertical; }
 .form-grid-2 { grid-template-columns: 1fr 1fr; }
 .form-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
 
+/* ── Cluster pin icon (overrides default circle) ────── */
+.cluster-pin-icon { background: none !important; border: none !important; }
+
 /* ── Map ─────────────────────────────────────────────── */
 .map-section { margin-bottom: 8px; }
 .map-section-head { margin-bottom: 10px; }

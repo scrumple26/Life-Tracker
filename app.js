@@ -803,7 +803,18 @@ function renderStadiumMap(events) {
     stadiumMapInstance.removeLayer(stadiumClusterGroup);
   }
 
-  stadiumClusterGroup = window.L.markerClusterGroup ? window.L.markerClusterGroup({ maxClusterRadius: 20 }) : null;
+  stadiumClusterGroup = window.L.markerClusterGroup ? window.L.markerClusterGroup({
+    maxClusterRadius: 20,
+    iconCreateFunction(cluster) {
+      const n = cluster.getChildCount();
+      return window.L.divIcon({
+        html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 38" width="26" height="38"><path d="M13 0C5.82 0 0 5.82 0 13c0 9.75 13 25 13 25S26 22.75 26 13C26 5.82 20.18 0 13 0z" fill="#2577b8" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/><text x="13" y="17" text-anchor="middle" fill="white" font-size="10" font-weight="bold" font-family="sans-serif">${n}</text></svg>`,
+        className: "cluster-pin-icon",
+        iconSize: [26, 38],
+        iconAnchor: [13, 38],
+      });
+    },
+  }) : null;
   const stadiumTarget = stadiumClusterGroup || stadiumMapInstance;
 
   const bounds = [];
@@ -1058,7 +1069,18 @@ function renderTeamsMap() {
     teamsMapInstance.removeLayer(teamsClusterGroup);
   }
 
-  teamsClusterGroup = window.L.markerClusterGroup ? window.L.markerClusterGroup({ maxClusterRadius: 20 }) : null;
+  teamsClusterGroup = window.L.markerClusterGroup ? window.L.markerClusterGroup({
+    maxClusterRadius: 20,
+    iconCreateFunction(cluster) {
+      const n = cluster.getChildCount();
+      return window.L.divIcon({
+        html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 38" width="26" height="38"><path d="M13 0C5.82 0 0 5.82 0 13c0 9.75 13 25 13 25S26 22.75 26 13C26 5.82 20.18 0 13 0z" fill="#2577b8" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/><text x="13" y="17" text-anchor="middle" fill="white" font-size="10" font-weight="bold" font-family="sans-serif">${n}</text></svg>`,
+        className: "cluster-pin-icon",
+        iconSize: [26, 38],
+        iconAnchor: [13, 38],
+      });
+    },
+  }) : null;
   const teamsTarget = teamsClusterGroup || teamsMapInstance;
 
   const bounds = [];
