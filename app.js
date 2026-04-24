@@ -750,7 +750,7 @@ function renderStadiumsTab() {
   const events = loadEvents();
 
   if (filterYear) {
-    const years = [...new Set(events.map((e) => e.date.slice(0, 4)))].sort().reverse();
+    const years = [...new Set(events.filter((e) => e.date).map((e) => e.date.slice(0, 4)))].sort().reverse();
     const cur = filterYear.value;
     filterYear.innerHTML =
       `<option value="">All Years</option>` +
@@ -759,7 +759,7 @@ function renderStadiumsTab() {
 
   let filtered = [...events];
   if (filterSport?.value) filtered = filtered.filter((e) => e.sport === filterSport.value);
-  if (filterYear?.value)  filtered = filtered.filter((e) => e.date.startsWith(filterYear.value));
+  if (filterYear?.value)  filtered = filtered.filter((e) => e.date && e.date.startsWith(filterYear.value));
   filtered.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
   if (!filtered.length) {
@@ -861,7 +861,7 @@ function renderScorersTab() {
   scorersAllEmpty.hidden = true;
   scorersAllList.innerHTML = scorers.map((s) => {
     const gameLines = [...s.games]
-      .sort((a, b) => b.date.localeCompare(a.date))
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
       .map((g) => {
         const min = g.minute ? ` ${esc(g.minute)}'` : "";
         return `<li class="scorer-game-line">${esc(g.match)} · <em>${esc(g.team)}${min}</em> · ${formatDate(g.date)}</li>`;
@@ -983,7 +983,7 @@ function renderTeamsTab() {
           </div>
         </form>`;
       const gameLines = [...t.games]
-        .sort((a, b) => b.date.localeCompare(a.date))
+        .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
         .map((g) => `<li class="team-game-line">${esc(g.match)} · ${formatDate(g.date)} · ${esc(g.stadium)}</li>`)
         .join("");
       return `
