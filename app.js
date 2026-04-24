@@ -47,39 +47,24 @@ const reqNum   = document.getElementById("req-num");
 // ── Utilities ─────────────────────────────────────────
 function esc(str) {
   return String(str ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function today() {
   const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
 function formatDate(dateStr) {
   if (!dateStr) return "";
   const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("en-US", {
-    month: "short", day: "numeric", year: "numeric"
-  });
+  return new Date(y, m-1, d).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" });
 }
 
-function isValidDate(str) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(str);
-}
-
-function isValidEmail(str) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(str).trim().toLowerCase());
-}
-
-function storageKey() {
-  return currentUser ? `life-tracker-events-${currentUser.uid}` : null;
-}
+function isValidDate(str) { return /^\d{4}-\d{2}-\d{2}$/.test(str); }
+function isValidEmail(str) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(str).trim().toLowerCase()); }
+function storageKey() { return currentUser ? `life-tracker-events-${currentUser.uid}` : null; }
 
 // ── Auth message ──────────────────────────────────────
 function setAuthMsg(text, isError = false) {
@@ -106,7 +91,7 @@ if (auth) {
   setAuthMsg("Firebase is not configured. Add your config in firebase-config.js.", true);
 }
 
-// ── Auth switch (Sign In / Create Account) ────────────
+// ── Auth switch ───────────────────────────────────────
 document.querySelectorAll(".auth-switch-btn, .auth-link-btn[data-switch]").forEach((btn) => {
   btn.addEventListener("click", () => {
     const mode = btn.dataset.mode || btn.dataset.switch;
@@ -122,7 +107,6 @@ document.querySelectorAll(".auth-switch-btn, .auth-link-btn[data-switch]").forEa
   });
 });
 
-// ── Show password toggles ─────────────────────────────
 signinShowPwd?.addEventListener("change", () => {
   signinPassword.type = signinShowPwd.checked ? "text" : "password";
 });
@@ -131,7 +115,6 @@ regShowPwd?.addEventListener("change", () => {
   regConfirm.type  = regShowPwd.checked ? "text" : "password";
 });
 
-// ── Password strength hints ───────────────────────────
 regPassword?.addEventListener("input", () => {
   const v = regPassword.value;
   reqLen.classList.toggle("met",   v.length >= 8);
@@ -140,11 +123,10 @@ regPassword?.addEventListener("input", () => {
   reqNum.classList.toggle("met",   /[0-9]/.test(v));
 });
 
-// ── Sign in ───────────────────────────────────────────
 signinForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!auth) { setAuthMsg("Firebase not configured.", true); return; }
-  const email    = signinEmail.value.trim().toLowerCase();
+  const email = signinEmail.value.trim().toLowerCase();
   const password = signinPassword.value;
   if (!email || !password) { setAuthMsg("Enter email and password.", true); return; }
   try {
@@ -163,34 +145,28 @@ signinForm?.addEventListener("submit", async (e) => {
   }
 });
 
-// ── Register ──────────────────────────────────────────
 registerForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!auth) { setAuthMsg("Firebase not configured.", true); return; }
   const email    = regEmail.value.trim().toLowerCase();
   const password = regPassword.value;
   const confirm  = regConfirm.value;
-  if (!isValidEmail(email))          { setAuthMsg("Enter a valid email address.", true); return; }
-  if (password.length < 8)           { setAuthMsg("Password must be at least 8 characters.", true); return; }
-  if (!/[A-Z]/.test(password))       { setAuthMsg("Password must include an uppercase letter.", true); return; }
-  if (!/[a-z]/.test(password))       { setAuthMsg("Password must include a lowercase letter.", true); return; }
-  if (!/[0-9]/.test(password))       { setAuthMsg("Password must include a number.", true); return; }
-  if (password !== confirm)          { setAuthMsg("Passwords do not match.", true); return; }
+  if (!isValidEmail(email))    { setAuthMsg("Enter a valid email address.", true); return; }
+  if (password.length < 8)     { setAuthMsg("Password must be at least 8 characters.", true); return; }
+  if (!/[A-Z]/.test(password)) { setAuthMsg("Password must include an uppercase letter.", true); return; }
+  if (!/[a-z]/.test(password)) { setAuthMsg("Password must include a lowercase letter.", true); return; }
+  if (!/[0-9]/.test(password)) { setAuthMsg("Password must include a number.", true); return; }
+  if (password !== confirm)    { setAuthMsg("Passwords do not match.", true); return; }
   try {
     await createUserWithEmailAndPassword(auth, email, password);
     registerForm.reset();
     setAuthMsg("");
   } catch (err) {
     const code = err?.code || "";
-    if (code.includes("email-already-in-use")) {
-      setAuthMsg("An account with that email already exists.", true);
-    } else {
-      setAuthMsg("Unable to create account right now.", true);
-    }
+    setAuthMsg(code.includes("email-already-in-use") ? "An account with that email already exists." : "Unable to create account right now.", true);
   }
 });
 
-// ── Forgot password ───────────────────────────────────
 forgotBtn?.addEventListener("click", async () => {
   if (!auth) { setAuthMsg("Firebase not configured.", true); return; }
   const email = signinEmail?.value.trim().toLowerCase() || "";
@@ -203,15 +179,18 @@ forgotBtn?.addEventListener("click", async () => {
   }
 });
 
-// ── Sign out ──────────────────────────────────────────
 signoutBtn?.addEventListener("click", async () => {
   if (auth) { try { await signOut(auth); } catch { /* ignore */ } }
 });
 
 // ── Tab switching ─────────────────────────────────────
 let activeTab = "log";
-const tabLog      = document.getElementById("tab-log");
-const tabStadiums = document.getElementById("tab-stadiums");
+const tabPanels = {
+  log:      document.getElementById("tab-log"),
+  stadiums: document.getElementById("tab-stadiums"),
+  scorers:  document.getElementById("tab-scorers"),
+  teams:    document.getElementById("tab-teams"),
+};
 
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -223,15 +202,14 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
       b.classList.toggle("active", on);
       b.setAttribute("aria-selected", String(on));
     });
-    tabLog.hidden      = tab !== "log";
-    tabStadiums.hidden = tab !== "stadiums";
+    Object.entries(tabPanels).forEach(([key, el]) => { if (el) el.hidden = key !== tab; });
     if (tab === "stadiums") renderStadiumsTab();
+    if (tab === "scorers")  renderScorersTab();
+    if (tab === "teams")    renderTeamsTab();
   });
 });
 
 // ── Sports events storage ─────────────────────────────
-const STORAGE_VERSION = "life-tracker-events-v1";
-
 function loadEvents() {
   try {
     const key = storageKey();
@@ -251,7 +229,8 @@ function loadEvents() {
       stadium:   typeof e.stadium === "string" ? e.stadium : "",
       city:      typeof e.city === "string" ? e.city : "",
       side:      ["home","away","neutral"].includes(e.side) ? e.side : "neutral",
-      scorers:   typeof e.scorers === "string" ? e.scorers : "",
+      // scorers: array of {name, team, minute} — or empty array
+      scorers:   Array.isArray(e.scorers) ? e.scorers : [],
       notes:     typeof e.notes === "string" ? e.notes : "",
       lat:       typeof e.lat === "number" ? e.lat : null,
       lng:       typeof e.lng === "number" ? e.lng : null,
@@ -270,35 +249,40 @@ function newId() {
   return `ev-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-// ── Sport / side labels ───────────────────────────────
+// ── Labels ────────────────────────────────────────────
 const SPORT_LABELS = {
-  soccer: "Soccer", basketball: "Basketball", baseball: "Baseball",
-  "american-football": "Football", hockey: "Hockey", tennis: "Tennis",
-  rugby: "Rugby", mma: "MMA/Boxing", other: "Other",
+  soccer:"Soccer", basketball:"Basketball", baseball:"Baseball",
+  "american-football":"Football", hockey:"Hockey", tennis:"Tennis",
+  rugby:"Rugby", mma:"MMA/Boxing", other:"Other",
 };
-const SIDE_LABELS = { home: "Home fan", away: "Away fan", neutral: "Neutral" };
-
 function sportLabel(s) { return SPORT_LABELS[s] || "Other"; }
-function sideLabel(s)  { return SIDE_LABELS[s] || "Neutral"; }
+function sideLabel(s)  { return s === "home" ? "Home fan" : s === "away" ? "Away fan" : "Neutral"; }
 function resultLine(e) {
   if (e.homeScore > e.awayScore) return `${esc(e.homeTeam)} won`;
   if (e.awayScore > e.homeScore) return `${esc(e.awayTeam)} won`;
   return "Draw";
 }
 
-// ── Render helpers ────────────────────────────────────
+// ── Event card HTML ───────────────────────────────────
+function scorerLine(e) {
+  if (e.sport !== "soccer" || !e.scorers.length) return "";
+  const items = e.scorers.map((s) => {
+    const teamName = s.team === "home" ? esc(e.homeTeam) : esc(e.awayTeam);
+    const min = s.minute ? ` ${esc(s.minute)}'` : "";
+    return `${esc(s.name)} <span class="scorer-team">(${teamName}${min})</span>`;
+  }).join(" &nbsp;·&nbsp; ");
+  return `<span class="event-meta scorer-meta">⚽ ${items}</span>`;
+}
+
 function eventItemHTML(e) {
-  const scorers = e.sport === "soccer" && e.scorers
-    ? `<span class="event-meta">Goals: ${esc(e.scorers)}</span>` : "";
-  const notes = e.notes
-    ? `<span class="event-notes">${esc(e.notes)}</span>` : "";
   return `
     <li class="event-item">
       <div class="event-info">
         <span class="event-title">${esc(e.homeTeam)} ${e.homeScore}–${e.awayScore} ${esc(e.awayTeam)}</span>
         <span class="event-meta">${sportLabel(e.sport)} · ${formatDate(e.date)} · ${sideLabel(e.side)}</span>
         <span class="event-meta">${esc(e.stadium)}, ${esc(e.city)} · ${resultLine(e)}</span>
-        ${scorers}${notes}
+        ${scorerLine(e)}
+        ${e.notes ? `<span class="event-notes">${esc(e.notes)}</span>` : ""}
       </div>
       <button class="btn btn-sm btn-danger" type="button"
         data-action="delete" data-id="${esc(e.id)}" aria-label="Delete event">✕</button>
@@ -315,18 +299,61 @@ const logHomeScore = document.getElementById("log-home-score");
 const logAwayScore = document.getElementById("log-away-score");
 const logStadium   = document.getElementById("log-stadium");
 const logCity      = document.getElementById("log-city");
-const logScorers   = document.getElementById("log-scorers");
 const logNotes     = document.getElementById("log-notes");
 const scorersWrap  = document.getElementById("scorers-wrap");
 const recentList   = document.getElementById("recent-list");
 const recentEmpty  = document.getElementById("recent-empty");
 
+const scorerNameInput  = document.getElementById("scorer-name");
+const scorerTeamSide   = document.getElementById("scorer-team-side");
+const scorerMinInput   = document.getElementById("scorer-minute");
+const scorerAddBtn     = document.getElementById("scorer-add-btn");
+const scorersStaged    = document.getElementById("scorers-staged");
+
 if (logDate) logDate.value = today();
+
+// staged scorers for current form
+let stagedScorers = [];
 
 function updateScorersVisibility() {
   if (scorersWrap) scorersWrap.hidden = logSport?.value !== "soccer";
 }
 logSport?.addEventListener("change", updateScorersVisibility);
+
+function renderStagedScorers() {
+  if (!scorersStaged) return;
+  if (!stagedScorers.length) { scorersStaged.innerHTML = ""; return; }
+  scorersStaged.innerHTML = stagedScorers.map((s, i) => {
+    const teamLabel = s.team === "home"
+      ? (logHomeTeam?.value.trim() || "Home")
+      : (logAwayTeam?.value.trim() || "Away");
+    const min = s.minute ? ` ${s.minute}'` : "";
+    return `<li class="scorer-chip">
+      <span>⚽ ${esc(s.name)} <em>(${esc(teamLabel)}${min})</em></span>
+      <button type="button" class="chip-remove" data-scorer-idx="${i}" aria-label="Remove">&times;</button>
+    </li>`;
+  }).join("");
+}
+
+scorerAddBtn?.addEventListener("click", () => {
+  const name = scorerNameInput?.value.trim() || "";
+  if (!name) { scorerNameInput?.focus(); return; }
+  const team   = scorerTeamSide?.value || "home";
+  const minute = scorerMinInput?.value.trim() || "";
+  stagedScorers.push({ name, team, minute });
+  if (scorerNameInput)  scorerNameInput.value  = "";
+  if (scorerMinInput)   scorerMinInput.value   = "";
+  scorerNameInput?.focus();
+  renderStagedScorers();
+});
+
+scorersStaged?.addEventListener("click", (e) => {
+  const btn = e.target.closest(".chip-remove");
+  if (!btn) return;
+  const idx = parseInt(btn.dataset.scorerIdx, 10);
+  stagedScorers.splice(idx, 1);
+  renderStagedScorers();
+});
 
 function renderRecentEvents() {
   const events = loadEvents();
@@ -352,17 +379,14 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
   const stadium   = logStadium?.value.trim() || "";
   const city      = logCity?.value.trim() || "";
   const side      = logSide?.value || "neutral";
-  const scorers   = sport === "soccer" ? (logScorers?.value.trim() || "") : "";
+  const scorers   = sport === "soccer" ? [...stagedScorers] : [];
   const notes     = logNotes?.value.trim() || "";
 
   if (!homeTeam || !awayTeam || !stadium || !city) {
     alert("Please fill in both teams, stadium, and city.");
     return;
   }
-  if (!isValidDate(date)) {
-    alert("Please enter a valid date.");
-    return;
-  }
+  if (!isValidDate(date)) { alert("Please enter a valid date."); return; }
 
   const ev = {
     id: newId(), date, sport, homeTeam, awayTeam,
@@ -376,14 +400,16 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
   all.push(ev);
   saveEvents(all);
 
+  // reset form
   if (logHomeTeam)  logHomeTeam.value  = "";
   if (logAwayTeam)  logAwayTeam.value  = "";
   if (logHomeScore) logHomeScore.value = "";
   if (logAwayScore) logAwayScore.value = "";
   if (logStadium)   logStadium.value   = "";
   if (logCity)      logCity.value      = "";
-  if (logScorers)   logScorers.value   = "";
   if (logNotes)     logNotes.value     = "";
+  stagedScorers = [];
+  renderStagedScorers();
 
   renderRecentEvents();
   geocodePending();
@@ -399,18 +425,20 @@ document.addEventListener("click", (e) => {
   saveEvents(updated);
   renderRecentEvents();
   if (activeTab === "stadiums") renderStadiumsTab();
+  if (activeTab === "scorers")  renderScorersTab();
+  if (activeTab === "teams")    renderTeamsTab();
 });
 
 // ── My Stadiums tab ───────────────────────────────────
-const filterSport = document.getElementById("filter-sport");
-const filterYear  = document.getElementById("filter-year");
-const fullList    = document.getElementById("full-list");
-const fullEmpty   = document.getElementById("full-empty");
-const mapEmpty    = document.getElementById("map-empty");
-const mapContainer= document.getElementById("events-map");
+const filterSport  = document.getElementById("filter-sport");
+const filterYear   = document.getElementById("filter-year");
+const fullList     = document.getElementById("full-list");
+const fullEmpty    = document.getElementById("full-empty");
+const mapEmpty     = document.getElementById("map-empty");
+const mapContainer = document.getElementById("events-map");
 
-let mapInstance = null;
-let mapReady    = false;
+let stadiumMapInstance = null;
+let stadiumMapReady    = false;
 
 filterSport?.addEventListener("change", renderStadiumsTab);
 filterYear?.addEventListener("change",  renderStadiumsTab);
@@ -418,7 +446,6 @@ filterYear?.addEventListener("change",  renderStadiumsTab);
 function renderStadiumsTab() {
   const events = loadEvents();
 
-  // Populate year filter
   if (filterYear) {
     const years = [...new Set(events.map((e) => e.date.slice(0, 4)))].sort().reverse();
     const cur = filterYear.value;
@@ -427,13 +454,11 @@ function renderStadiumsTab() {
       years.map((y) => `<option value="${y}"${y === cur ? " selected" : ""}>${y}</option>`).join("");
   }
 
-  // Filter
   let filtered = [...events];
   if (filterSport?.value) filtered = filtered.filter((e) => e.sport === filterSport.value);
   if (filterYear?.value)  filtered = filtered.filter((e) => e.date.startsWith(filterYear.value));
   filtered.sort((a, b) => b.date.localeCompare(a.date));
 
-  // Full list
   if (!filtered.length) {
     fullList.innerHTML = "";
     fullEmpty.hidden = false;
@@ -442,19 +467,15 @@ function renderStadiumsTab() {
     fullList.innerHTML = filtered.map(eventItemHTML).join("");
   }
 
-  renderMap(filtered);
+  renderStadiumMap(filtered);
 }
 
-function renderMap(events) {
+function renderStadiumMap(events) {
   const withCoords = events.filter((e) => typeof e.lat === "number" && typeof e.lng === "number");
-
-  // Group by stadium
   const byStadium = new Map();
   withCoords.forEach((e) => {
     const key = `${e.stadium}|||${e.city}`;
-    if (!byStadium.has(key)) {
-      byStadium.set(key, { stadium: e.stadium, city: e.city, lat: e.lat, lng: e.lng, events: [] });
-    }
+    if (!byStadium.has(key)) byStadium.set(key, { stadium: e.stadium, city: e.city, lat: e.lat, lng: e.lng, events: [] });
     byStadium.get(key).events.push(e);
   });
   const stadiums = [...byStadium.values()];
@@ -466,41 +487,208 @@ function renderMap(events) {
   }
   if (mapContainer) mapContainer.style.display = "";
   if (mapEmpty) mapEmpty.hidden = true;
-
   if (typeof window.L === "undefined") return;
 
-  if (!mapReady) {
-    mapInstance = window.L.map("events-map").setView([20, 0], 2);
+  if (!stadiumMapReady) {
+    stadiumMapInstance = window.L.map("events-map").setView([20, 0], 2);
     window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
       maxZoom: 19,
-    }).addTo(mapInstance);
-    mapReady = true;
+    }).addTo(stadiumMapInstance);
+    stadiumMapReady = true;
   } else {
-    mapInstance.eachLayer((l) => {
-      if (l instanceof window.L.Marker) mapInstance.removeLayer(l);
-    });
+    stadiumMapInstance.eachLayer((l) => { if (l instanceof window.L.Marker) stadiumMapInstance.removeLayer(l); });
   }
 
   const bounds = [];
   stadiums.forEach(({ stadium, city, lat, lng, events: evts }) => {
-    const lines = [...evts]
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .map((e) =>
-        `<b>${esc(e.homeTeam)} ${e.homeScore}–${e.awayScore} ${esc(e.awayTeam)}</b><br>` +
-        `${sportLabel(e.sport)} · ${formatDate(e.date)}`
-      ).join("<hr style='margin:5px 0'>");
-    const popup = `<b>${esc(stadium)}</b><br><em>${esc(city)}</em><hr style='margin:5px 0'>${lines}`;
-    window.L.marker([lat, lng]).addTo(mapInstance).bindPopup(popup);
+    const lines = [...evts].sort((a, b) => b.date.localeCompare(a.date))
+      .map((e) => `<b>${esc(e.homeTeam)} ${e.homeScore}–${e.awayScore} ${esc(e.awayTeam)}</b><br>${sportLabel(e.sport)} · ${formatDate(e.date)}`)
+      .join("<hr style='margin:5px 0'>");
+    window.L.marker([lat, lng]).addTo(stadiumMapInstance)
+      .bindPopup(`<b>${esc(stadium)}</b><br><em>${esc(city)}</em><hr style='margin:5px 0'>${lines}`);
     bounds.push([lat, lng]);
   });
 
-  if (bounds.length === 1) {
-    mapInstance.setView(bounds[0], 14);
-  } else {
-    mapInstance.fitBounds(bounds, { padding: [40, 40] });
+  if (bounds.length === 1) stadiumMapInstance.setView(bounds[0], 14);
+  else stadiumMapInstance.fitBounds(bounds, { padding: [40, 40] });
+  window.requestAnimationFrame(() => stadiumMapInstance.invalidateSize());
+}
+
+// ── Scorers tab ───────────────────────────────────────
+const scorersAllList  = document.getElementById("scorers-all-list");
+const scorersAllEmpty = document.getElementById("scorers-all-empty");
+
+function renderScorersTab() {
+  const events = loadEvents();
+
+  // Aggregate all scorers across all soccer events
+  const byScorer = new Map();
+  events.forEach((e) => {
+    if (e.sport !== "soccer" || !e.scorers.length) return;
+    e.scorers.forEach((s) => {
+      const key = s.name.toLowerCase().trim();
+      if (!byScorer.has(key)) {
+        byScorer.set(key, { name: s.name, goals: 0, games: [] });
+      }
+      const entry = byScorer.get(key);
+      entry.goals++;
+      const teamName = s.team === "home" ? e.homeTeam : e.awayTeam;
+      entry.games.push({
+        date: e.date,
+        match: `${e.homeTeam} ${e.homeScore}–${e.awayScore} ${e.awayTeam}`,
+        team: teamName,
+        minute: s.minute,
+        stadium: e.stadium,
+      });
+    });
+  });
+
+  const scorers = [...byScorer.values()].sort((a, b) => b.goals - a.goals || a.name.localeCompare(b.name));
+
+  if (!scorers.length) {
+    scorersAllList.innerHTML = "";
+    scorersAllEmpty.hidden = false;
+    return;
   }
-  window.requestAnimationFrame(() => mapInstance.invalidateSize());
+  scorersAllEmpty.hidden = true;
+  scorersAllList.innerHTML = scorers.map((s) => {
+    const gameLines = [...s.games]
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map((g) => {
+        const min = g.minute ? ` ${esc(g.minute)}'` : "";
+        return `<li class="scorer-game-line">${esc(g.match)} · <em>${esc(g.team)}${min}</em> · ${formatDate(g.date)}</li>`;
+      }).join("");
+    return `
+      <li class="scorer-entry">
+        <div class="scorer-entry-head">
+          <span class="scorer-entry-name">${esc(s.name)}</span>
+          <span class="scorer-entry-count">${s.goals} ${s.goals === 1 ? "goal" : "goals"}</span>
+        </div>
+        <ul class="scorer-game-list">${gameLines}</ul>
+      </li>`;
+  }).join("");
+}
+
+// ── Teams tab ─────────────────────────────────────────
+const teamsList        = document.getElementById("teams-list");
+const teamsEmpty       = document.getElementById("teams-empty");
+const teamsListSection = document.getElementById("teams-list-section");
+const teamsMapSection  = document.getElementById("teams-map-section");
+const teamsMapEl       = document.getElementById("teams-map");
+const teamsMapEmpty    = document.getElementById("teams-map-empty");
+
+let teamsView = "list";
+let teamsMapInstance = null;
+let teamsMapReady    = false;
+
+document.querySelectorAll(".view-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    teamsView = btn.dataset.view;
+    document.querySelectorAll(".view-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === teamsView));
+    teamsListSection.hidden = teamsView !== "list";
+    teamsMapSection.hidden  = teamsView !== "map";
+    if (teamsView === "map") renderTeamsMap();
+  });
+});
+
+function renderTeamsTab() {
+  const events = loadEvents();
+
+  // Aggregate teams
+  const byTeam = new Map();
+  events.forEach((e) => {
+    ["home", "away"].forEach((side) => {
+      const name = side === "home" ? e.homeTeam : e.awayTeam;
+      if (!name) return;
+      const key = name.toLowerCase().trim();
+      if (!byTeam.has(key)) byTeam.set(key, { name, games: [], lat: null, lng: null, stadium: "", city: "" });
+      const entry = byTeam.get(key);
+      entry.games.push({ date: e.date, match: `${e.homeTeam} ${e.homeScore}–${e.awayScore} ${e.awayTeam}`, sport: e.sport, stadium: e.stadium, city: e.city, lat: e.lat, lng: e.lng });
+      // Use first available geocoded location for map pin
+      if (!entry.lat && typeof e.lat === "number") {
+        entry.lat = e.lat; entry.lng = e.lng;
+        entry.stadium = e.stadium; entry.city = e.city;
+      }
+    });
+  });
+
+  const teams = [...byTeam.values()].sort((a, b) => a.name.localeCompare(b.name));
+
+  if (!teams.length) {
+    teamsList.innerHTML = "";
+    teamsEmpty.hidden = false;
+  } else {
+    teamsEmpty.hidden = true;
+    teamsList.innerHTML = teams.map((t) => {
+      const gameLines = [...t.games]
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .map((g) => `<li class="team-game-line">${esc(g.match)} · ${formatDate(g.date)} · ${esc(g.stadium)}</li>`)
+        .join("");
+      return `
+        <li class="team-entry">
+          <div class="team-entry-head">
+            <span class="team-entry-name">${esc(t.name)}</span>
+            <span class="team-entry-count">${t.games.length} ${t.games.length === 1 ? "game" : "games"}</span>
+          </div>
+          <ul class="team-game-list">${gameLines}</ul>
+        </li>`;
+    }).join("");
+  }
+
+  if (teamsView === "map") renderTeamsMap();
+}
+
+function renderTeamsMap() {
+  const events = loadEvents();
+  const withCoords = events.filter((e) => typeof e.lat === "number" && typeof e.lng === "number");
+
+  // Group by stadium, list all teams that played there
+  const byStadium = new Map();
+  withCoords.forEach((e) => {
+    const key = `${e.stadium}|||${e.city}`;
+    if (!byStadium.has(key)) byStadium.set(key, { stadium: e.stadium, city: e.city, lat: e.lat, lng: e.lng, teams: new Set(), events: [] });
+    const entry = byStadium.get(key);
+    entry.teams.add(e.homeTeam);
+    entry.teams.add(e.awayTeam);
+    entry.events.push(e);
+  });
+  const stadiums = [...byStadium.values()];
+
+  if (!stadiums.length) {
+    if (teamsMapEl) teamsMapEl.style.display = "none";
+    if (teamsMapEmpty) teamsMapEmpty.hidden = false;
+    return;
+  }
+  if (teamsMapEl) teamsMapEl.style.display = "";
+  if (teamsMapEmpty) teamsMapEmpty.hidden = true;
+  if (typeof window.L === "undefined") return;
+
+  if (!teamsMapReady) {
+    teamsMapInstance = window.L.map("teams-map").setView([20, 0], 2);
+    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(teamsMapInstance);
+    teamsMapReady = true;
+  } else {
+    teamsMapInstance.eachLayer((l) => { if (l instanceof window.L.Marker) teamsMapInstance.removeLayer(l); });
+  }
+
+  const bounds = [];
+  stadiums.forEach(({ stadium, city, lat, lng, teams, events: evts }) => {
+    const teamList = [...teams].filter(Boolean).map(esc).join(", ");
+    const lines = [...evts].sort((a, b) => b.date.localeCompare(a.date))
+      .map((e) => `<b>${esc(e.homeTeam)} ${e.homeScore}–${e.awayScore} ${esc(e.awayTeam)}</b><br>${formatDate(e.date)}`)
+      .join("<hr style='margin:5px 0'>");
+    const popup = `<b>${esc(stadium)}</b><br><em>${esc(city)}</em><br><small>${teamList}</small><hr style='margin:5px 0'>${lines}`;
+    window.L.marker([lat, lng]).addTo(teamsMapInstance).bindPopup(popup);
+    bounds.push([lat, lng]);
+  });
+
+  if (bounds.length === 1) teamsMapInstance.setView(bounds[0], 14);
+  else teamsMapInstance.fitBounds(bounds, { padding: [40, 40] });
+  window.requestAnimationFrame(() => teamsMapInstance.invalidateSize());
 }
 
 // ── Geocoding ─────────────────────────────────────────
@@ -532,10 +720,11 @@ async function geocodePending() {
   if (changed) {
     saveEvents(events);
     if (activeTab === "stadiums") renderStadiumsTab();
+    if (activeTab === "teams")    renderTeamsTab();
   }
 }
 
-// ── App init (called once on sign-in) ─────────────────
+// ── App init ──────────────────────────────────────────
 function initApp() {
   updateScorersVisibility();
   renderRecentEvents();

@@ -109,6 +109,8 @@
       <nav class="tab-nav" role="tablist">
         <button class="tab-btn active" type="button" data-tab="log" role="tab" aria-selected="true">Log Event</button>
         <button class="tab-btn" type="button" data-tab="stadiums" role="tab" aria-selected="false">My Stadiums</button>
+        <button class="tab-btn" type="button" data-tab="scorers" role="tab" aria-selected="false">Scorers</button>
+        <button class="tab-btn" type="button" data-tab="teams" role="tab" aria-selected="false">Teams</button>
       </nav>
 
       <!-- Log Event tab -->
@@ -177,11 +179,17 @@
             </label>
           </div>
           <div id="scorers-wrap">
-            <label>
-              Goal Scorers
-              <input id="log-scorers" type="text" maxlength="280" placeholder="e.g. Messi 23', Ronaldo 67'" />
-            </label>
-            <p class="muted small">Optional — soccer only.</p>
+            <p class="field-label">Goal Scorers</p>
+            <div class="scorer-add-row">
+              <input id="scorer-name" type="text" maxlength="80" placeholder="Player name" />
+              <select id="scorer-team-side">
+                <option value="home">Home</option>
+                <option value="away">Away</option>
+              </select>
+              <input id="scorer-minute" type="text" maxlength="4" placeholder="Min" />
+              <button id="scorer-add-btn" class="btn btn-sm" type="button">+ Add</button>
+            </div>
+            <ul id="scorers-staged" class="scorers-chips"></ul>
           </div>
           <label>
             Notes
@@ -243,6 +251,36 @@
         <ul id="full-list" class="event-list"></ul>
         <p id="full-empty" class="empty-state" hidden>No events logged yet.</p>
       </section>
+      <!-- Scorers tab -->
+      <section id="tab-scorers" class="panel" role="tabpanel" hidden>
+        <div class="panel-head">
+          <h2>Goal Scorers</h2>
+          <p class="muted">Everyone you've seen score a goal, across all games.</p>
+        </div>
+        <ul id="scorers-all-list" class="scorers-all-list"></ul>
+        <p id="scorers-all-empty" class="empty-state" hidden>No goals logged yet. Log a soccer game and add scorers.</p>
+      </section>
+
+      <!-- Teams tab -->
+      <section id="tab-teams" class="panel" role="tabpanel" hidden>
+        <div class="panel-head">
+          <h2>Teams</h2>
+          <p class="muted">Every team you've watched play.</p>
+        </div>
+        <div class="view-toggle">
+          <button class="view-btn active" type="button" data-view="list">List</button>
+          <button class="view-btn" type="button" data-view="map">Map</button>
+        </div>
+        <div id="teams-list-section">
+          <ul id="teams-list" class="teams-list"></ul>
+          <p id="teams-empty" class="empty-state" hidden>No teams yet. Log some events to get started.</p>
+        </div>
+        <div id="teams-map-section" hidden>
+          <div id="teams-map" class="map-container"></div>
+          <p id="teams-map-empty" class="empty-state" hidden>No stadium locations yet — locations appear automatically once events are geocoded.</p>
+        </div>
+      </section>
+
     </div>
 
   </main>
