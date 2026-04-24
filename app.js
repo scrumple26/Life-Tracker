@@ -803,7 +803,7 @@ function renderStadiumMap(events) {
     stadiumMapInstance.removeLayer(stadiumClusterGroup);
   }
 
-  stadiumClusterGroup = window.L.markerClusterGroup ? window.L.markerClusterGroup() : null;
+  stadiumClusterGroup = window.L.markerClusterGroup ? window.L.markerClusterGroup({ maxClusterRadius: 20 }) : null;
   const stadiumTarget = stadiumClusterGroup || stadiumMapInstance;
 
   const bounds = [];
@@ -1058,7 +1058,7 @@ function renderTeamsMap() {
     teamsMapInstance.removeLayer(teamsClusterGroup);
   }
 
-  teamsClusterGroup = window.L.markerClusterGroup ? window.L.markerClusterGroup() : null;
+  teamsClusterGroup = window.L.markerClusterGroup ? window.L.markerClusterGroup({ maxClusterRadius: 20 }) : null;
   const teamsTarget = teamsClusterGroup || teamsMapInstance;
 
   const bounds = [];
