@@ -220,12 +220,12 @@ function loadEvents() {
     if (!Array.isArray(parsed)) return [];
     return parsed.filter((e) => e && typeof e.id === "string").map((e) => ({
       id:        String(e.id),
-      date:      isValidDate(e.date) ? e.date : today(),
+      date:      isValidDate(e.date) ? e.date : null,
       sport:     typeof e.sport === "string" ? e.sport : "other",
       homeTeam:  typeof e.homeTeam === "string" ? e.homeTeam : "",
       awayTeam:  typeof e.awayTeam === "string" ? e.awayTeam : "",
-      homeScore: typeof e.homeScore === "number" ? e.homeScore : 0,
-      awayScore: typeof e.awayScore === "number" ? e.awayScore : 0,
+      homeScore: typeof e.homeScore === "number" ? e.homeScore : null,
+      awayScore: typeof e.awayScore === "number" ? e.awayScore : null,
       stadium:   typeof e.stadium === "string" ? e.stadium : "",
       city:      typeof e.city === "string" ? e.city : "",
       side:      ["home","away","neutral"].includes(e.side) ? e.side : "neutral",
@@ -260,9 +260,16 @@ const SPORT_LABELS = {
 function sportLabel(s) { return SPORT_LABELS[s] || "Other"; }
 function sideLabel(s)  { return s === "home" ? "Home fan" : s === "away" ? "Away fan" : "Neutral"; }
 function resultLine(e) {
-  if (e.homeScore > e.awayScore) return `${esc(e.homeTeam)} won`;
-  if (e.awayScore > e.homeScore) return `${esc(e.awayTeam)} won`;
+  if (e.homeScore == null || e.awayScore == null) return "Result unknown";
+  if (e.homeScore > e.awayScore) return `${esc(e.homeTeam || "Home")} won`;
+  if (e.awayScore > e.homeScore) return `${esc(e.awayTeam || "Away")} won`;
   return "Draw";
+}
+
+function scoreDisplay(e) {
+  const h = e.homeScore != null ? e.homeScore : "?";
+  const a = e.awayScore != null ? e.awayScore : "?";
+  return `${h}–${a}`;
 }
 
 // ── Event card HTML ───────────────────────────────────
@@ -280,9 +287,9 @@ function eventItemHTML(e) {
   return `
     <li class="event-item">
       <div class="event-info">
-        <span class="event-title">${esc(e.homeTeam)} ${e.homeScore}–${e.awayScore} ${esc(e.awayTeam)}</span>
-        <span class="event-meta">${sportLabel(e.sport)}${e.competition ? ` · ${esc(e.competition)}` : ""} · ${formatDate(e.date)} · ${sideLabel(e.side)}</span>
-        <span class="event-meta">${esc(e.stadium)}, ${esc(e.city)} · ${resultLine(e)}${e.penalties ? ` (pens ${e.penalties.home}–${e.penalties.away})` : ""}</span>
+        <span class="event-title">${esc(e.homeTeam || "?")} ${scoreDisplay(e)} ${esc(e.awayTeam || "?")}</span>
+        <span class="event-meta">${sportLabel(e.sport)}${e.competition ? ` · ${esc(e.competition)}` : ""} · ${e.date ? formatDate(e.date) : '<span class="unknown-badge">Date unknown</span>'} · ${sideLabel(e.side)}</span>
+        <span class="event-meta">${e.stadium ? esc(e.stadium) : "Venue unknown"}${e.city ? `, ${esc(e.city)}` : ""} · ${resultLine(e)}${e.penalties ? ` (pens ${e.penalties.home}–${e.penalties.away})` : ""}</span>
         ${scorerLine(e)}
         ${e.notes ? `<span class="event-notes">${esc(e.notes)}</span>` : ""}
       </div>
@@ -292,7 +299,8 @@ function eventItemHTML(e) {
 }
 
 // ── Log Event tab ─────────────────────────────────────
-const logDate      = document.getElementById("log-date");
+const logDate        = document.getElementById("log-date");
+const logDateUnknown = document.getElementById("log-date-unknown");
 const logSport     = document.getElementById("log-sport");
 const logSide      = document.getElementById("log-side");
 const logHomeTeam  = document.getElementById("log-home-team");
@@ -320,6 +328,13 @@ const scorerAddBtn     = document.getElementById("scorer-add-btn");
 const scorersStaged    = document.getElementById("scorers-staged");
 
 if (logDate) logDate.value = today();
+
+logDateUnknown?.addEventListener("change", () => {
+  if (logDate) {
+    logDate.disabled = logDateUnknown.checked;
+    if (logDateUnknown.checked) logDate.value = "";
+  }
+});
 
 // staged scorers for current form
 let stagedScorers = [];
@@ -382,7 +397,7 @@ scorersStaged?.addEventListener("click", (e) => {
 
 function renderRecentEvents() {
   const events = loadEvents();
-  const recent = [...events].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
+  const recent = [...events].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 8);
   if (!recent.length) {
     recentList.innerHTML = "";
     recentEmpty.hidden = false;
@@ -395,14 +410,18 @@ function renderRecentEvents() {
 document.getElementById("log-form")?.addEventListener("submit", (e) => {
   e.preventDefault();
   if (!currentUser) return;
-  const date      = logDate?.value || "";
-  const sport     = logSport?.value || "other";
-  const homeTeam  = logHomeTeam?.value.trim() || "";
-  const awayTeam  = logAwayTeam?.value.trim() || "";
-  const homeScore = parseInt(logHomeScore?.value || "0", 10);
-  const awayScore = parseInt(logAwayScore?.value || "0", 10);
-  const stadium   = logStadium?.value.trim() || "";
-  const city      = logCity?.value.trim() || "";
+  const dateUnknown = logDateUnknown?.checked || false;
+  const dateRaw     = logDate?.value || "";
+  const date        = dateUnknown ? null : (isValidDate(dateRaw) ? dateRaw : null);
+  const sport       = logSport?.value || "other";
+  const homeTeam    = logHomeTeam?.value.trim() || "";
+  const awayTeam    = logAwayTeam?.value.trim() || "";
+  const homeScoreRaw = logHomeScore?.value;
+  const awayScoreRaw = logAwayScore?.value;
+  const homeScore   = homeScoreRaw !== "" && homeScoreRaw != null ? (parseInt(homeScoreRaw, 10) || 0) : null;
+  const awayScore   = awayScoreRaw !== "" && awayScoreRaw != null ? (parseInt(awayScoreRaw, 10) || 0) : null;
+  const stadium     = logStadium?.value.trim() || "";
+  const city        = logCity?.value.trim() || "";
   const side        = logSide?.value || "neutral";
   const scorers     = sport === "soccer" ? [...stagedScorers] : [];
   const competition = sport === "soccer" ? (logCompetition?.value.trim() || "") : "";
@@ -412,11 +431,10 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
     : null;
   const notes       = logNotes?.value.trim() || "";
 
-  if (!homeTeam || !awayTeam || !stadium || !city) {
-    alert("Please fill in both teams, stadium, and city.");
+  if (!homeTeam && !awayTeam && !stadium) {
+    alert("Add at least one team or a stadium so you can identify this event.");
     return;
   }
-  if (!isValidDate(date)) { alert("Please enter a valid date."); return; }
 
   const ev = {
     id: newId(), date, sport, homeTeam, awayTeam,
@@ -437,6 +455,7 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
   if (logAwayScore) logAwayScore.value = "";
   if (logStadium)   logStadium.value   = "";
   if (logCity)      logCity.value      = "";
+  if (logDateUnknown) { logDateUnknown.checked = false; if (logDate) logDate.disabled = false; logDate.value = today(); }
   if (logCompetition)    logCompetition.value    = "";
   if (logPenaltiesCheck) { logPenaltiesCheck.checked = false; if (penaltiesWrap) penaltiesWrap.hidden = true; }
   if (logPenHome)        logPenHome.value        = "";
@@ -491,7 +510,7 @@ function renderStadiumsTab() {
   let filtered = [...events];
   if (filterSport?.value) filtered = filtered.filter((e) => e.sport === filterSport.value);
   if (filterYear?.value)  filtered = filtered.filter((e) => e.date.startsWith(filterYear.value));
-  filtered.sort((a, b) => b.date.localeCompare(a.date));
+  filtered.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
   if (!filtered.length) {
     fullList.innerHTML = "";

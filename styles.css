@@ -599,6 +599,17 @@ textarea { resize: vertical; }
   gap: 8px;
 }
 
+/* ── Date field with unknown toggle ─────────────────── */
+.date-field-wrap { display: grid; gap: 6px; }
+.date-unknown-check { font-size: 0.8rem; font-weight: 500; }
+input:disabled { opacity: 0.45; }
+
+/* ── Unknown badge in event cards ────────────────────── */
+.unknown-badge {
+  color: var(--muted);
+  font-style: italic;
+}
+
 /* ── Utility ─────────────────────────────────────────── */
 .muted { color: var(--muted); font-size: 0.875rem; }
 .small { font-size: 0.8rem; }

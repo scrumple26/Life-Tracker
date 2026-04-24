@@ -121,10 +121,16 @@
         </div>
         <form id="log-form" class="form-block">
           <div class="form-grid form-grid-3">
-            <label>
-              Date
-              <input id="log-date" type="date" required />
-            </label>
+            <div class="date-field-wrap">
+              <label>
+                Date
+                <input id="log-date" type="date" />
+              </label>
+              <label class="check-inline date-unknown-check">
+                <input id="log-date-unknown" type="checkbox" />
+                Unknown
+              </label>
+            </div>
             <label>
               Sport
               <select id="log-sport">
@@ -151,31 +157,31 @@
           <div class="form-grid form-grid-2">
             <label>
               Home Team
-              <input id="log-home-team" type="text" maxlength="80" placeholder="e.g. Manchester United" required />
+              <input id="log-home-team" type="text" maxlength="80" placeholder="e.g. Manchester United" />
             </label>
             <label>
               Away Team
-              <input id="log-away-team" type="text" maxlength="80" placeholder="e.g. Liverpool" required />
+              <input id="log-away-team" type="text" maxlength="80" placeholder="e.g. Liverpool" />
             </label>
           </div>
           <div class="form-grid form-grid-2">
             <label>
               Home Score
-              <input id="log-home-score" type="number" min="0" max="999" placeholder="0" required />
+              <input id="log-home-score" type="number" min="0" max="999" placeholder="?" />
             </label>
             <label>
               Away Score
-              <input id="log-away-score" type="number" min="0" max="999" placeholder="0" required />
+              <input id="log-away-score" type="number" min="0" max="999" placeholder="?" />
             </label>
           </div>
           <div class="form-grid form-grid-2">
             <label>
               Stadium / Venue
-              <input id="log-stadium" type="text" maxlength="120" placeholder="e.g. Old Trafford" required />
+              <input id="log-stadium" type="text" maxlength="120" placeholder="e.g. Old Trafford" />
             </label>
             <label>
               City / Country
-              <input id="log-city" type="text" maxlength="80" placeholder="e.g. Manchester, UK" required />
+              <input id="log-city" type="text" maxlength="80" placeholder="e.g. Manchester, UK" />
             </label>
           </div>
           <div id="scorers-wrap">
