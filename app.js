@@ -323,9 +323,10 @@ const recentEmpty  = document.getElementById("recent-empty");
 
 if (logDate) logDate.value = today();
 
-logSport?.addEventListener("change", () => {
-  if (scorersWrap) scorersWrap.hidden = logSport.value !== "soccer";
-});
+function updateScorersVisibility() {
+  if (scorersWrap) scorersWrap.hidden = logSport?.value !== "soccer";
+}
+logSport?.addEventListener("change", updateScorersVisibility);
 
 function renderRecentEvents() {
   const events = loadEvents();
@@ -536,6 +537,7 @@ async function geocodePending() {
 
 // ── App init (called once on sign-in) ─────────────────
 function initApp() {
+  updateScorersVisibility();
   renderRecentEvents();
   geocodePending();
 }
