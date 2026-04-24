@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Life Tracker</title>
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#009f94" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Life Tracker" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+</head>
+<body>
+  <main id="main" class="page">
+
+    <!-- ── Auth screen ──────────────────────────────── -->
+    <section id="auth-panel" class="card auth-panel">
+      <div class="auth-brand">
+        <div class="auth-brand-logo">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="48" height="48" aria-hidden="true">
+            <rect width="512" height="512" rx="96" fill="#009f94"/>
+            <circle cx="256" cy="256" r="148" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="12"/>
+            <polyline points="170,256 228,318 342,192" fill="none" stroke="#ffffff" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="auth-brand-text">
+          <span class="auth-brand-name">Life Tracker</span>
+          <span class="auth-brand-tagline">Your games, your stadiums</span>
+        </div>
+      </div>
+
+      <div class="auth-switch" role="tablist" aria-label="Authentication mode">
+        <button class="auth-switch-btn active" type="button" data-mode="signin" aria-selected="true">Sign In</button>
+        <button class="auth-switch-btn" type="button" data-mode="register" aria-selected="false">Create Account</button>
+      </div>
+
+      <form id="signin-form" class="auth-form">
+        <label>
+          Email
+          <input id="signin-email" type="email" autocomplete="email" required />
+        </label>
+        <label>
+          Password
+          <input id="signin-password" type="password" autocomplete="current-password" required />
+        </label>
+        <label class="check-inline">
+          <input id="signin-show-pwd" type="checkbox" />
+          Show password
+        </label>
+        <p class="forgot-row">
+          <button id="forgot-btn" class="forgot-link" type="button">Forgot password?</button>
+        </p>
+        <button class="btn btn-primary" type="submit">Sign In</button>
+        <p class="auth-note">Need an account? <button class="auth-link-btn" type="button" data-switch="register">Create one</button></p>
+      </form>
+
+      <form id="register-form" class="auth-form" hidden>
+        <label>
+          Email
+          <input id="reg-email" type="email" autocomplete="email" required />
+        </label>
+        <label>
+          Password
+          <input id="reg-password" type="password" autocomplete="new-password" required />
+        </label>
+        <div class="pwd-hints" id="pwd-hints">
+          <span class="pwd-req" id="req-len">8+ characters</span>
+          <span class="pwd-req" id="req-upper">Uppercase</span>
+          <span class="pwd-req" id="req-lower">Lowercase</span>
+          <span class="pwd-req" id="req-num">Number</span>
+        </div>
+        <label>
+          Confirm Password
+          <input id="reg-confirm" type="password" autocomplete="new-password" required />
+        </label>
+        <label class="check-inline">
+          <input id="reg-show-pwd" type="checkbox" />
+          Show passwords
+        </label>
+        <button class="btn btn-primary" type="submit">Create Account</button>
+        <p class="auth-note">Have an account? <button class="auth-link-btn" type="button" data-switch="signin">Sign in</button></p>
+      </form>
+
+      <p id="auth-msg" class="auth-msg" aria-live="polite"></p>
+    </section>
+
+    <!-- ── App shell ─────────────────────────────────── -->
+    <div id="app" hidden>
+      <header class="app-header">
+        <div class="app-header-brand">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="30" height="30" aria-hidden="true">
+            <rect width="512" height="512" rx="96" fill="#009f94"/>
+            <circle cx="256" cy="256" r="148" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="12"/>
+            <polyline points="170,256 228,318 342,192" fill="none" stroke="#ffffff" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="app-header-name">Life Tracker</span>
+        </div>
+        <div class="app-header-right">
+          <span id="user-label" class="user-label"></span>
+          <button id="signout-btn" class="btn btn-sm" type="button">Sign Out</button>
+        </div>
+      </header>
+
+      <nav class="tab-nav" role="tablist">
+        <button class="tab-btn active" type="button" data-tab="log" role="tab" aria-selected="true">Log Event</button>
+        <button class="tab-btn" type="button" data-tab="stadiums" role="tab" aria-selected="false">My Stadiums</button>
+      </nav>
+
+      <!-- Log Event tab -->
+      <section id="tab-log" class="panel" role="tabpanel">
+        <div class="panel-head">
+          <h2>Log Sporting Event</h2>
+          <p class="muted">Record a game you attended — score, stadium, city, and more.</p>
+        </div>
+        <form id="log-form" class="form-block">
+          <div class="form-grid form-grid-3">
+            <label>
+              Date
+              <input id="log-date" type="date" required />
+            </label>
+            <label>
+              Sport
+              <select id="log-sport">
+                <option value="soccer">Soccer / Football</option>
+                <option value="basketball">Basketball</option>
+                <option value="baseball">Baseball</option>
+                <option value="american-football">American Football</option>
+                <option value="hockey">Hockey</option>
+                <option value="tennis">Tennis</option>
+                <option value="rugby">Rugby</option>
+                <option value="mma">MMA / Boxing</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label>
+              Attended As
+              <select id="log-side">
+                <option value="home">Home fan</option>
+                <option value="away">Away fan</option>
+                <option value="neutral">Neutral</option>
+              </select>
+            </label>
+          </div>
+          <div class="form-grid form-grid-2">
+            <label>
+              Home Team
+              <input id="log-home-team" type="text" maxlength="80" placeholder="e.g. Manchester United" required />
+            </label>
+            <label>
+              Away Team
+              <input id="log-away-team" type="text" maxlength="80" placeholder="e.g. Liverpool" required />
+            </label>
+          </div>
+          <div class="form-grid form-grid-2">
+            <label>
+              Home Score
+              <input id="log-home-score" type="number" min="0" max="999" placeholder="0" required />
+            </label>
+            <label>
+              Away Score
+              <input id="log-away-score" type="number" min="0" max="999" placeholder="0" required />
+            </label>
+          </div>
+          <div class="form-grid form-grid-2">
+            <label>
+              Stadium / Venue
+              <input id="log-stadium" type="text" maxlength="120" placeholder="e.g. Old Trafford" required />
+            </label>
+            <label>
+              City / Country
+              <input id="log-city" type="text" maxlength="80" placeholder="e.g. Manchester, UK" required />
+            </label>
+          </div>
+          <div id="scorers-wrap" hidden>
+            <label>
+              Goal Scorers
+              <input id="log-scorers" type="text" maxlength="280" placeholder="e.g. Messi 23', Ronaldo 67'" />
+            </label>
+            <p class="muted small">Optional — soccer only.</p>
+          </div>
+          <label>
+            Notes
+            <textarea id="log-notes" rows="2" maxlength="280" placeholder="Optional notes about the experience"></textarea>
+          </label>
+          <button class="btn btn-primary btn-full" type="submit">Log Event</button>
+        </form>
+
+        <div class="section-head">
+          <h3>Recent Events</h3>
+        </div>
+        <ul id="recent-list" class="event-list"></ul>
+        <p id="recent-empty" class="empty-state" hidden>No events logged yet. Fill in the form above to get started.</p>
+      </section>
+
+      <!-- My Stadiums tab -->
+      <section id="tab-stadiums" class="panel" role="tabpanel" hidden>
+        <div class="panel-head">
+          <h2>My Stadiums</h2>
+          <p class="muted">Every venue you've visited. Tap a marker to see the games played there.</p>
+        </div>
+
+        <div class="form-grid form-grid-2 filters-row">
+          <label>
+            Filter by Sport
+            <select id="filter-sport">
+              <option value="">All Sports</option>
+              <option value="soccer">Soccer / Football</option>
+              <option value="basketball">Basketball</option>
+              <option value="baseball">Baseball</option>
+              <option value="american-football">American Football</option>
+              <option value="hockey">Hockey</option>
+              <option value="tennis">Tennis</option>
+              <option value="rugby">Rugby</option>
+              <option value="mma">MMA / Boxing</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label>
+            Filter by Year
+            <select id="filter-year">
+              <option value="">All Years</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="map-section">
+          <div class="map-section-head">
+            <h3>Stadium Map</h3>
+            <p class="muted small">Tap a pin to see events at that venue. Locations geocoded automatically.</p>
+          </div>
+          <div id="events-map" class="map-container"></div>
+          <p id="map-empty" class="empty-state" hidden>No stadium locations yet. Log events with a stadium and city — they'll appear on the map automatically.</p>
+        </div>
+
+        <div class="section-head">
+          <h3>Event History</h3>
+        </div>
+        <ul id="full-list" class="event-list"></ul>
+        <p id="full-empty" class="empty-state" hidden>No events logged yet.</p>
+      </section>
+    </div>
+
+  </main>
+
+  <script src="firebase-config.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "Life Tracker",
+  "short_name": "Life Tracker",
+  "description": "Log sporting events and map every stadium you've visited",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#009f94",
+  "background_color": "#e8fbf8",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
