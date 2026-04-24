@@ -14,6 +14,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 </head>
 <body>
   <main id="main" class="page">
@@ -155,14 +157,28 @@
             </label>
           </div>
           <div class="form-grid form-grid-2">
-            <label>
-              Home Team
-              <input id="log-home-team" type="text" maxlength="80" placeholder="e.g. Manchester United" />
-            </label>
-            <label>
-              Away Team
-              <input id="log-away-team" type="text" maxlength="80" placeholder="e.g. Liverpool" />
-            </label>
+            <div class="team-field-group">
+              <label>
+                Home Team
+                <input id="log-home-team" type="text" maxlength="80" placeholder="e.g. Manchester United" />
+              </label>
+              <div class="team-loc-mini">
+                <input id="log-home-loc-city"    type="text" maxlength="80" placeholder="City" />
+                <input id="log-home-loc-state"   type="text" maxlength="80" placeholder="State" />
+                <input id="log-home-loc-country" type="text" maxlength="80" placeholder="Country" />
+              </div>
+            </div>
+            <div class="team-field-group">
+              <label>
+                Away Team
+                <input id="log-away-team" type="text" maxlength="80" placeholder="e.g. Liverpool" />
+              </label>
+              <div class="team-loc-mini">
+                <input id="log-away-loc-city"    type="text" maxlength="80" placeholder="City" />
+                <input id="log-away-loc-state"   type="text" maxlength="80" placeholder="State" />
+                <input id="log-away-loc-country" type="text" maxlength="80" placeholder="Country" />
+              </div>
+            </div>
           </div>
           <div class="form-grid form-grid-2">
             <label>
@@ -173,6 +189,27 @@
               Away Score
               <input id="log-away-score" type="number" min="0" max="999" placeholder="?" />
             </label>
+          </div>
+          <div id="lineup-section">
+            <p class="field-label">Lineups <span class="field-label-hint">(optional)</span></p>
+            <div class="lineup-add-block">
+              <p class="lineup-team-label" id="lineup-home-label">Home Lineup</p>
+              <div class="lineup-add-row">
+                <input id="lineup-home-name" type="text" maxlength="80" placeholder="Player name" />
+                <input id="lineup-home-pos"  type="text" maxlength="30" placeholder="Position" />
+                <button id="lineup-home-add-btn" class="btn btn-sm" type="button">+ Add</button>
+              </div>
+              <ul id="lineup-home-staged" class="scorers-chips"></ul>
+            </div>
+            <div class="lineup-add-block">
+              <p class="lineup-team-label" id="lineup-away-label">Away Lineup</p>
+              <div class="lineup-add-row">
+                <input id="lineup-away-name" type="text" maxlength="80" placeholder="Player name" />
+                <input id="lineup-away-pos"  type="text" maxlength="30" placeholder="Position" />
+                <button id="lineup-away-add-btn" class="btn btn-sm" type="button">+ Add</button>
+              </div>
+              <ul id="lineup-away-staged" class="scorers-chips"></ul>
+            </div>
           </div>
           <div class="form-grid form-grid-2">
             <label>
@@ -314,6 +351,7 @@
 
   <script src="firebase-config.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

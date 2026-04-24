@@ -233,6 +233,8 @@ function loadEvents() {
       scorers:     Array.isArray(e.scorers) ? e.scorers : [],
       competition: typeof e.competition === "string" ? e.competition : "",
       penalties:   e.penalties && typeof e.penalties.home === "number" ? e.penalties : null,
+      homeLineup:  Array.isArray(e.homeLineup) ? e.homeLineup : [],
+      awayLineup:  Array.isArray(e.awayLineup) ? e.awayLineup : [],
       notes:       typeof e.notes === "string" ? e.notes : "",
       lat:       typeof e.lat === "number" ? e.lat : null,
       lng:       typeof e.lng === "number" ? e.lng : null,
@@ -273,6 +275,16 @@ function scoreDisplay(e) {
 }
 
 // ── Event card HTML ───────────────────────────────────
+function lineupLine(e) {
+  const hCount = e.homeLineup?.length || 0;
+  const aCount = e.awayLineup?.length || 0;
+  if (!hCount && !aCount) return "";
+  const parts = [];
+  if (hCount) parts.push(`${hCount} ${esc(e.homeTeam || "Home")}`);
+  if (aCount) parts.push(`${aCount} ${esc(e.awayTeam || "Away")}`);
+  return `<span class="event-meta">🏃 ${parts.join(" · ")}</span>`;
+}
+
 function scorerLine(e) {
   if (e.sport !== "soccer" || !e.scorers.length) return "";
   const items = e.scorers.map((s) => {
@@ -291,6 +303,7 @@ function eventItemHTML(e) {
         <span class="event-meta">${sportLabel(e.sport)}${e.competition ? ` · ${esc(e.competition)}` : ""} · ${e.date ? formatDate(e.date) : '<span class="unknown-badge">Date unknown</span>'} · ${sideLabel(e.side)}</span>
         <span class="event-meta">${e.stadium ? esc(e.stadium) : "Venue unknown"}${e.city ? `, ${esc(e.city)}` : ""} · ${resultLine(e)}${e.penalties ? ` (pens ${e.penalties.home}–${e.penalties.away})` : ""}</span>
         ${scorerLine(e)}
+        ${lineupLine(e)}
         ${e.notes ? `<span class="event-notes">${esc(e.notes)}</span>` : ""}
       </div>
       <div class="event-actions">
@@ -311,6 +324,12 @@ const logHomeTeam  = document.getElementById("log-home-team");
 const logAwayTeam  = document.getElementById("log-away-team");
 const logHomeScore = document.getElementById("log-home-score");
 const logAwayScore = document.getElementById("log-away-score");
+const logHomeLocCity    = document.getElementById("log-home-loc-city");
+const logHomeLocState   = document.getElementById("log-home-loc-state");
+const logHomeLocCountry = document.getElementById("log-home-loc-country");
+const logAwayLocCity    = document.getElementById("log-away-loc-city");
+const logAwayLocState   = document.getElementById("log-away-loc-state");
+const logAwayLocCountry = document.getElementById("log-away-loc-country");
 const logStadium   = document.getElementById("log-stadium");
 const logCity      = document.getElementById("log-city");
 const logCompetition    = document.getElementById("log-competition");
@@ -331,6 +350,17 @@ const scorerMinInput   = document.getElementById("scorer-minute");
 const scorerAddBtn     = document.getElementById("scorer-add-btn");
 const scorersStaged    = document.getElementById("scorers-staged");
 
+const lineupHomeNameInput = document.getElementById("lineup-home-name");
+const lineupHomePosInput  = document.getElementById("lineup-home-pos");
+const lineupHomeAddBtn    = document.getElementById("lineup-home-add-btn");
+const lineupHomeStaged    = document.getElementById("lineup-home-staged");
+const lineupHomeLabel     = document.getElementById("lineup-home-label");
+const lineupAwayNameInput = document.getElementById("lineup-away-name");
+const lineupAwayPosInput  = document.getElementById("lineup-away-pos");
+const lineupAwayAddBtn    = document.getElementById("lineup-away-add-btn");
+const lineupAwayStaged    = document.getElementById("lineup-away-staged");
+const lineupAwayLabel     = document.getElementById("lineup-away-label");
+
 if (logDate) logDate.value = today();
 
 logDateUnknown?.addEventListener("change", () => {
@@ -340,9 +370,11 @@ logDateUnknown?.addEventListener("change", () => {
   }
 });
 
-// staged scorers for current form
-let stagedScorers = [];
-let editingEventId = null; // non-null when editing an existing event
+// staged scorers and lineups for current form
+let stagedScorers    = [];
+let stagedHomeLineup = [];
+let stagedAwayLineup = [];
+let editingEventId   = null;
 
 const logForm       = document.getElementById("log-form");
 const logSubmitBtn  = logForm?.querySelector("button[type='submit']");
@@ -365,7 +397,11 @@ function cancelEdit() {
   if (penaltiesWrap) penaltiesWrap.hidden = true;
   if (logPenaltiesCheck) logPenaltiesCheck.checked = false;
   stagedScorers = [];
+  stagedHomeLineup = [];
+  stagedAwayLineup = [];
   renderStagedScorers();
+  renderStagedLineup("home");
+  renderStagedLineup("away");
   updateSoccerFields();
 }
 
@@ -394,6 +430,17 @@ function loadEventIntoForm(ev) {
   if (logStadium)   logStadium.value   = ev.stadium   || "";
   if (logCity)      logCity.value      = ev.city      || "";
   if (logCompetition) logCompetition.value = ev.competition || "";
+
+  // pre-fill team locations from saved data
+  const locs = loadTeamLocs();
+  const homeLoc = ev.homeTeam ? locs[ev.homeTeam.toLowerCase().trim()] : null;
+  const awayLoc = ev.awayTeam ? locs[ev.awayTeam.toLowerCase().trim()] : null;
+  if (logHomeLocCity)    logHomeLocCity.value    = homeLoc?.city    || "";
+  if (logHomeLocState)   logHomeLocState.value   = homeLoc?.state   || "";
+  if (logHomeLocCountry) logHomeLocCountry.value = homeLoc?.country || "";
+  if (logAwayLocCity)    logAwayLocCity.value    = awayLoc?.city    || "";
+  if (logAwayLocState)   logAwayLocState.value   = awayLoc?.state   || "";
+  if (logAwayLocCountry) logAwayLocCountry.value = awayLoc?.country || "";
   if (logNotes)     logNotes.value     = ev.notes     || "";
 
   const hasPens = !!ev.penalties;
@@ -402,10 +449,15 @@ function loadEventIntoForm(ev) {
   if (logPenHome) logPenHome.value = ev.penalties?.home ?? "";
   if (logPenAway) logPenAway.value = ev.penalties?.away ?? "";
 
-  stagedScorers = Array.isArray(ev.scorers) ? [...ev.scorers] : [];
+  stagedScorers    = Array.isArray(ev.scorers)     ? [...ev.scorers]     : [];
+  stagedHomeLineup = Array.isArray(ev.homeLineup)  ? [...ev.homeLineup]  : [];
+  stagedAwayLineup = Array.isArray(ev.awayLineup)  ? [...ev.awayLineup]  : [];
   renderStagedScorers();
+  renderStagedLineup("home");
+  renderStagedLineup("away");
   updateSoccerFields();
   updatePenaltyLabels();
+  updateLineupLabels();
 }
 
 function updateSoccerFields() {
@@ -426,8 +478,27 @@ function updatePenaltyLabels() {
   if (penaltiesHomeLabel) penaltiesHomeLabel.textContent = logHomeTeam?.value.trim() || "Home";
   if (penaltiesAwayLabel) penaltiesAwayLabel.textContent = logAwayTeam?.value.trim() || "Away";
 }
-logHomeTeam?.addEventListener("input", updatePenaltyLabels);
-logAwayTeam?.addEventListener("input", updatePenaltyLabels);
+function updateLineupLabels() {
+  if (lineupHomeLabel) lineupHomeLabel.textContent = (logHomeTeam?.value.trim() || "Home") + " Lineup";
+  if (lineupAwayLabel) lineupAwayLabel.textContent = (logAwayTeam?.value.trim() || "Away") + " Lineup";
+}
+logHomeTeam?.addEventListener("input", () => { updatePenaltyLabels(); updateLineupLabels(); });
+logAwayTeam?.addEventListener("input", () => { updatePenaltyLabels(); updateLineupLabels(); });
+
+function autoFillTeamLoc(teamName, cityEl, stateEl, countryEl) {
+  if (!teamName) return;
+  const locs = loadTeamLocs();
+  const loc  = locs[teamName.toLowerCase().trim()];
+  if (!loc) return;
+  if (cityEl    && !cityEl.value)    cityEl.value    = loc.city    || "";
+  if (stateEl   && !stateEl.value)   stateEl.value   = loc.state   || "";
+  if (countryEl && !countryEl.value) countryEl.value = loc.country || "";
+}
+
+logHomeTeam?.addEventListener("blur", () =>
+  autoFillTeamLoc(logHomeTeam.value, logHomeLocCity, logHomeLocState, logHomeLocCountry));
+logAwayTeam?.addEventListener("blur", () =>
+  autoFillTeamLoc(logAwayTeam.value, logAwayLocCity, logAwayLocState, logAwayLocCountry));
 
 function renderStagedScorers() {
   if (!scorersStaged) return;
@@ -462,6 +533,56 @@ scorersStaged?.addEventListener("click", (e) => {
   const idx = parseInt(btn.dataset.scorerIdx, 10);
   stagedScorers.splice(idx, 1);
   renderStagedScorers();
+});
+
+function renderStagedLineup(side) {
+  const staged = side === "home" ? stagedHomeLineup : stagedAwayLineup;
+  const listEl = side === "home" ? lineupHomeStaged : lineupAwayStaged;
+  if (!listEl) return;
+  if (!staged.length) { listEl.innerHTML = ""; return; }
+  listEl.innerHTML = staged.map((p, i) => `
+    <li class="lineup-chip">
+      <span>${esc(p.name)}${p.position ? ` <em>(${esc(p.position)})</em>` : ""}</span>
+      <button type="button" class="chip-remove" data-lineup-side="${side}" data-lineup-idx="${i}" aria-label="Remove">&times;</button>
+    </li>`
+  ).join("");
+}
+
+lineupHomeAddBtn?.addEventListener("click", () => {
+  const name = lineupHomeNameInput?.value.trim() || "";
+  if (!name) { lineupHomeNameInput?.focus(); return; }
+  const position = lineupHomePosInput?.value.trim() || "";
+  stagedHomeLineup.push({ name, position });
+  if (lineupHomeNameInput) lineupHomeNameInput.value = "";
+  if (lineupHomePosInput)  lineupHomePosInput.value  = "";
+  lineupHomeNameInput?.focus();
+  renderStagedLineup("home");
+});
+
+lineupAwayAddBtn?.addEventListener("click", () => {
+  const name = lineupAwayNameInput?.value.trim() || "";
+  if (!name) { lineupAwayNameInput?.focus(); return; }
+  const position = lineupAwayPosInput?.value.trim() || "";
+  stagedAwayLineup.push({ name, position });
+  if (lineupAwayNameInput) lineupAwayNameInput.value = "";
+  if (lineupAwayPosInput)  lineupAwayPosInput.value  = "";
+  lineupAwayNameInput?.focus();
+  renderStagedLineup("away");
+});
+
+lineupHomeStaged?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-lineup-idx]");
+  if (!btn) return;
+  const idx = parseInt(btn.dataset.lineupIdx, 10);
+  if (btn.dataset.lineupSide === "home") { stagedHomeLineup.splice(idx, 1); renderStagedLineup("home"); }
+  else { stagedAwayLineup.splice(idx, 1); renderStagedLineup("away"); }
+});
+lineupAwayStaged?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-lineup-idx]");
+  if (!btn) return;
+  const idx = parseInt(btn.dataset.lineupIdx, 10);
+  if (btn.dataset.lineupSide === "home") { stagedHomeLineup.splice(idx, 1); renderStagedLineup("home"); }
+  else { stagedAwayLineup.splice(idx, 1); renderStagedLineup("away"); }
 });
 
 function renderRecentEvents() {
@@ -509,9 +630,42 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
     id: newId(), date, sport, homeTeam, awayTeam,
     homeScore: isNaN(homeScore) ? 0 : homeScore,
     awayScore: isNaN(awayScore) ? 0 : awayScore,
-    stadium, city, side, scorers, competition, penalties, notes,
+    stadium, city, side, scorers, competition, penalties,
+    homeLineup: [...stagedHomeLineup],
+    awayLineup: [...stagedAwayLineup],
+    notes,
     lat: null, lng: null, createdAt: new Date().toISOString(),
   };
+
+  // Save team locations if provided
+  const locs = loadTeamLocs();
+  let locChanged = false;
+  const teamsToSave = [
+    { name: homeTeam, city: logHomeLocCity?.value.trim(), state: logHomeLocState?.value.trim(), country: logHomeLocCountry?.value.trim() },
+    { name: awayTeam, city: logAwayLocCity?.value.trim(), state: logAwayLocState?.value.trim(), country: logAwayLocCountry?.value.trim() },
+  ];
+  for (const t of teamsToSave) {
+    if (!t.name || (!t.city && !t.country)) continue;
+    const key = t.name.toLowerCase().trim();
+    const existing = locs[key];
+    if (!existing || existing.city !== t.city || existing.state !== t.state || existing.country !== t.country) {
+      locs[key] = { city: t.city || "", state: t.state || "", country: t.country || "", lat: null, lng: null };
+      locChanged = true;
+    }
+  }
+  if (locChanged) {
+    saveTeamLocs(locs);
+    // geocode new locations in background
+    for (const t of teamsToSave) {
+      if (!t.name || (!t.city && !t.country)) continue;
+      const key = t.name.toLowerCase().trim();
+      if (locs[key] && locs[key].lat === null) {
+        geocodeTeamLocation(t.city, t.state, t.country).then((coords) => {
+          if (coords) { locs[key].lat = coords.lat; locs[key].lng = coords.lng; saveTeamLocs(locs); }
+        });
+      }
+    }
+  }
 
   const all = loadEvents();
   if (editingEventId) {
@@ -534,13 +688,23 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
   if (logSubmitBtn) logSubmitBtn.textContent = "Log Event";
   editCancelBtn.hidden = true;
   if (logDateUnknown) { logDateUnknown.checked = false; if (logDate) logDate.disabled = false; logDate.value = today(); }
+  if (logHomeLocCity)    logHomeLocCity.value    = "";
+  if (logHomeLocState)   logHomeLocState.value   = "";
+  if (logHomeLocCountry) logHomeLocCountry.value = "";
+  if (logAwayLocCity)    logAwayLocCity.value    = "";
+  if (logAwayLocState)   logAwayLocState.value   = "";
+  if (logAwayLocCountry) logAwayLocCountry.value = "";
   if (logCompetition)    logCompetition.value    = "";
   if (logPenaltiesCheck) { logPenaltiesCheck.checked = false; if (penaltiesWrap) penaltiesWrap.hidden = true; }
   if (logPenHome)        logPenHome.value        = "";
   if (logPenAway)        logPenAway.value        = "";
   if (logNotes)          logNotes.value          = "";
-  stagedScorers = [];
+  stagedScorers    = [];
+  stagedHomeLineup = [];
+  stagedAwayLineup = [];
   renderStagedScorers();
+  renderStagedLineup("home");
+  renderStagedLineup("away");
 
   renderRecentEvents();
   geocodePending();
@@ -575,8 +739,9 @@ const fullEmpty    = document.getElementById("full-empty");
 const mapEmpty     = document.getElementById("map-empty");
 const mapContainer = document.getElementById("events-map");
 
-let stadiumMapInstance = null;
-let stadiumMapReady    = false;
+let stadiumMapInstance  = null;
+let stadiumMapReady     = false;
+let stadiumClusterGroup = null;
 
 filterSport?.addEventListener("change", renderStadiumsTab);
 filterYear?.addEventListener("change",  renderStadiumsTab);
@@ -634,20 +799,24 @@ function renderStadiumMap(events) {
       maxZoom: 19,
     }).addTo(stadiumMapInstance);
     stadiumMapReady = true;
-  } else {
-    stadiumMapInstance.eachLayer((l) => { if (l instanceof window.L.Marker) stadiumMapInstance.removeLayer(l); });
+  } else if (stadiumClusterGroup) {
+    stadiumMapInstance.removeLayer(stadiumClusterGroup);
   }
+
+  stadiumClusterGroup = window.L.markerClusterGroup ? window.L.markerClusterGroup() : null;
+  const stadiumTarget = stadiumClusterGroup || stadiumMapInstance;
 
   const bounds = [];
   stadiums.forEach(({ stadium, city, lat, lng, events: evts }) => {
-    const lines = [...evts].sort((a, b) => b.date.localeCompare(a.date))
-      .map((e) => `<b>${esc(e.homeTeam)} ${e.homeScore}–${e.awayScore} ${esc(e.awayTeam)}</b><br>${sportLabel(e.sport)} · ${formatDate(e.date)}`)
+    const lines = [...evts].sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+      .map((e) => `<b>${esc(e.homeTeam)} ${scoreDisplay(e)} ${esc(e.awayTeam)}</b><br>${sportLabel(e.sport)} · ${e.date ? formatDate(e.date) : "Date unknown"}`)
       .join("<hr style='margin:5px 0'>");
-    window.L.marker([lat, lng]).addTo(stadiumMapInstance)
+    window.L.marker([lat, lng]).addTo(stadiumTarget)
       .bindPopup(`<b>${esc(stadium)}</b><br><em>${esc(city)}</em><hr style='margin:5px 0'>${lines}`);
     bounds.push([lat, lng]);
   });
 
+  if (stadiumClusterGroup) stadiumMapInstance.addLayer(stadiumClusterGroup);
   if (bounds.length === 1) stadiumMapInstance.setView(bounds[0], 14);
   else stadiumMapInstance.fitBounds(bounds, { padding: [40, 40] });
   window.requestAnimationFrame(() => stadiumMapInstance.invalidateSize());
@@ -747,9 +916,10 @@ const teamsMapSection  = document.getElementById("teams-map-section");
 const teamsMapEl       = document.getElementById("teams-map");
 const teamsMapEmpty    = document.getElementById("teams-map-empty");
 
-let teamsView = "list";
-let teamsMapInstance = null;
-let teamsMapReady    = false;
+let teamsView        = "list";
+let teamsMapInstance  = null;
+let teamsMapReady     = false;
+let teamsClusterGroup = null;
 
 document.querySelectorAll(".view-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -884,21 +1054,25 @@ function renderTeamsMap() {
       maxZoom: 19,
     }).addTo(teamsMapInstance);
     teamsMapReady = true;
-  } else {
-    teamsMapInstance.eachLayer((l) => { if (l instanceof window.L.Marker) teamsMapInstance.removeLayer(l); });
+  } else if (teamsClusterGroup) {
+    teamsMapInstance.removeLayer(teamsClusterGroup);
   }
+
+  teamsClusterGroup = window.L.markerClusterGroup ? window.L.markerClusterGroup() : null;
+  const teamsTarget = teamsClusterGroup || teamsMapInstance;
 
   const bounds = [];
   teams.forEach((t) => {
     const locText = [t.loc.city, t.loc.state, t.loc.country].filter(Boolean).join(", ");
-    const gameLines = [...t.games].sort((a, b) => b.date.localeCompare(a.date))
-      .map((g) => `${esc(g.match)} · ${formatDate(g.date)}`)
+    const gameLines = [...t.games].sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+      .map((g) => `${esc(g.match)} · ${g.date ? formatDate(g.date) : "Date unknown"}`)
       .join("<br>");
     const popup = `<b>${esc(t.name)}</b><br><em>${esc(locText)}</em><hr style='margin:5px 0'>${gameLines}`;
-    window.L.marker([t.loc.lat, t.loc.lng]).addTo(teamsMapInstance).bindPopup(popup);
+    window.L.marker([t.loc.lat, t.loc.lng]).addTo(teamsTarget).bindPopup(popup);
     bounds.push([t.loc.lat, t.loc.lng]);
   });
 
+  if (teamsClusterGroup) teamsMapInstance.addLayer(teamsClusterGroup);
   if (bounds.length === 1) teamsMapInstance.setView(bounds[0], 10);
   else teamsMapInstance.fitBounds(bounds, { padding: [40, 40] });
   window.requestAnimationFrame(() => teamsMapInstance.invalidateSize());
