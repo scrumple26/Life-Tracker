@@ -293,8 +293,12 @@ function eventItemHTML(e) {
         ${scorerLine(e)}
         ${e.notes ? `<span class="event-notes">${esc(e.notes)}</span>` : ""}
       </div>
-      <button class="btn btn-sm btn-danger" type="button"
-        data-action="delete" data-id="${esc(e.id)}" aria-label="Delete event">✕</button>
+      <div class="event-actions">
+        <button class="btn btn-sm" type="button"
+          data-action="edit-event" data-id="${esc(e.id)}" aria-label="Edit event">Edit</button>
+        <button class="btn btn-sm btn-danger" type="button"
+          data-action="delete" data-id="${esc(e.id)}" aria-label="Delete event">✕</button>
+      </div>
     </li>`;
 }
 
@@ -338,6 +342,71 @@ logDateUnknown?.addEventListener("change", () => {
 
 // staged scorers for current form
 let stagedScorers = [];
+let editingEventId = null; // non-null when editing an existing event
+
+const logForm       = document.getElementById("log-form");
+const logSubmitBtn  = logForm?.querySelector("button[type='submit']");
+const editCancelBtn = document.createElement("button");
+editCancelBtn.type = "button";
+editCancelBtn.className = "btn btn-full";
+editCancelBtn.textContent = "Cancel Edit";
+editCancelBtn.hidden = true;
+editCancelBtn.addEventListener("click", cancelEdit);
+logSubmitBtn?.insertAdjacentElement("afterend", editCancelBtn);
+
+function cancelEdit() {
+  editingEventId = null;
+  if (logSubmitBtn) logSubmitBtn.textContent = "Log Event";
+  editCancelBtn.hidden = true;
+  logForm?.reset();
+  if (logDate) logDate.value = today();
+  if (logDate) logDate.disabled = false;
+  if (logDateUnknown) logDateUnknown.checked = false;
+  if (penaltiesWrap) penaltiesWrap.hidden = true;
+  if (logPenaltiesCheck) logPenaltiesCheck.checked = false;
+  stagedScorers = [];
+  renderStagedScorers();
+  updateSoccerFields();
+}
+
+function loadEventIntoForm(ev) {
+  editingEventId = ev.id;
+  if (logSubmitBtn) logSubmitBtn.textContent = "Save Changes";
+  editCancelBtn.hidden = false;
+
+  // scroll to form
+  logForm?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  // switch to Log tab if not already there
+  if (activeTab !== "log") {
+    document.querySelector(".tab-btn[data-tab='log']")?.click();
+  }
+
+  if (logDate) { logDate.disabled = false; logDate.value = ev.date || ""; }
+  if (logDateUnknown) logDateUnknown.checked = !ev.date;
+  if (ev.date === null && logDate) logDate.disabled = true;
+  if (logSport) logSport.value = ev.sport || "soccer";
+  if (logSide)  logSide.value  = ev.side  || "neutral";
+  if (logHomeTeam)  logHomeTeam.value  = ev.homeTeam  || "";
+  if (logAwayTeam)  logAwayTeam.value  = ev.awayTeam  || "";
+  if (logHomeScore) logHomeScore.value = ev.homeScore != null ? ev.homeScore : "";
+  if (logAwayScore) logAwayScore.value = ev.awayScore != null ? ev.awayScore : "";
+  if (logStadium)   logStadium.value   = ev.stadium   || "";
+  if (logCity)      logCity.value      = ev.city      || "";
+  if (logCompetition) logCompetition.value = ev.competition || "";
+  if (logNotes)     logNotes.value     = ev.notes     || "";
+
+  const hasPens = !!ev.penalties;
+  if (logPenaltiesCheck) logPenaltiesCheck.checked = hasPens;
+  if (penaltiesWrap) penaltiesWrap.hidden = !hasPens;
+  if (logPenHome) logPenHome.value = ev.penalties?.home ?? "";
+  if (logPenAway) logPenAway.value = ev.penalties?.away ?? "";
+
+  stagedScorers = Array.isArray(ev.scorers) ? [...ev.scorers] : [];
+  renderStagedScorers();
+  updateSoccerFields();
+  updatePenaltyLabels();
+}
 
 function updateSoccerFields() {
   const isSoccer = logSport?.value === "soccer";
@@ -445,7 +514,13 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
   };
 
   const all = loadEvents();
-  all.push(ev);
+  if (editingEventId) {
+    const idx = all.findIndex((e) => e.id === editingEventId);
+    if (idx !== -1) all[idx] = { ...all[idx], ...ev, id: editingEventId };
+    else all.push(ev);
+  } else {
+    all.push(ev);
+  }
   saveEvents(all);
 
   // reset form
@@ -455,6 +530,9 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
   if (logAwayScore) logAwayScore.value = "";
   if (logStadium)   logStadium.value   = "";
   if (logCity)      logCity.value      = "";
+  editingEventId = null;
+  if (logSubmitBtn) logSubmitBtn.textContent = "Log Event";
+  editCancelBtn.hidden = true;
   if (logDateUnknown) { logDateUnknown.checked = false; if (logDate) logDate.disabled = false; logDate.value = today(); }
   if (logCompetition)    logCompetition.value    = "";
   if (logPenaltiesCheck) { logPenaltiesCheck.checked = false; if (penaltiesWrap) penaltiesWrap.hidden = true; }
@@ -470,6 +548,13 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
 
 // ── Delete events ─────────────────────────────────────
 document.addEventListener("click", (e) => {
+  const editBtn = e.target.closest("button[data-action='edit-event']");
+  if (editBtn && currentUser) {
+    const id = String(editBtn.dataset.id || "");
+    const ev = loadEvents().find((ev) => ev.id === id);
+    if (ev) loadEventIntoForm(ev);
+    return;
+  }
   const btn = e.target.closest("button[data-action='delete']");
   if (!btn || !currentUser) return;
   const id = String(btn.dataset.id || "");

@@ -425,6 +425,13 @@ textarea { resize: vertical; }
   font-size: 0.82rem;
   color: var(--muted);
 }
+.event-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .event-notes {
   font-size: 0.82rem;
   color: var(--muted);
