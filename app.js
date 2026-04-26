@@ -7,14 +7,22 @@ import {
   sendPasswordResetEmail,
   signOut,
 } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+} from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 
 // ── Firebase init ─────────────────────────────────────
 const config = window.LIFE_TRACKER_FIREBASE_CONFIG || {};
 const firebaseReady = !!(config.apiKey && config.authDomain && config.projectId);
 let auth = null;
+let db   = null;
 if (firebaseReady) {
   const app = initializeApp(config);
   auth = getAuth(app);
+  db   = getFirestore(app);
 }
 
 // ── State ─────────────────────────────────────────────
@@ -65,6 +73,7 @@ function formatDate(dateStr) {
 function isValidDate(str) { return /^\d{4}-\d{2}-\d{2}$/.test(str); }
 function isValidEmail(str) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(str).trim().toLowerCase()); }
 function storageKey() { return currentUser ? `life-tracker-events-${currentUser.uid}` : null; }
+function userDocRef() { return currentUser && db ? doc(db, "lifeTrackerData", currentUser.uid) : null; }
 
 // ── Auth message ──────────────────────────────────────
 function setAuthMsg(text, isError = false) {
@@ -247,6 +256,8 @@ function saveEvents(events) {
   const key = storageKey();
   if (!key) return;
   localStorage.setItem(key, JSON.stringify(events));
+  const ref = userDocRef();
+  if (ref) setDoc(ref, { events }, { merge: true }).catch(() => {});
 }
 
 function newId() {
@@ -892,6 +903,8 @@ function loadTeamLocs() {
 function saveTeamLocs(locs) {
   const key = teamLocsKey();
   if (key) localStorage.setItem(key, JSON.stringify(locs));
+  const ref = userDocRef();
+  if (ref) setDoc(ref, { teamLocs: locs }, { merge: true }).catch(() => {});
 }
 
 async function geocodeTeamLocation(city, state, country) {
@@ -1132,8 +1145,28 @@ async function geocodePending() {
 }
 
 // ── App init ──────────────────────────────────────────
-function initApp() {
+async function initApp() {
   updateSoccerFields();
+
+  // Pull from Firestore and hydrate localStorage so data is the same on every device
+  const ref = userDocRef();
+  if (ref) {
+    try {
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const data = snap.data();
+        const evKey = storageKey();
+        if (evKey && Array.isArray(data.events)) {
+          localStorage.setItem(evKey, JSON.stringify(data.events));
+        }
+        const tlKey = teamLocsKey();
+        if (tlKey && data.teamLocs && typeof data.teamLocs === "object") {
+          localStorage.setItem(tlKey, JSON.stringify(data.teamLocs));
+        }
+      }
+    } catch { /* fall through to whatever is in localStorage */ }
+  }
+
   renderRecentEvents();
   geocodePending();
 }
