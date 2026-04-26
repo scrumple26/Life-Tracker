@@ -1148,22 +1148,64 @@ async function geocodePending() {
 async function initApp() {
   updateSoccerFields();
 
-  // Pull from Firestore and hydrate localStorage so data is the same on every device
+  // Merge Firestore data with whatever is already on this device, then persist the union
   const ref = userDocRef();
   if (ref) {
     try {
       const snap = await getDoc(ref);
+      const evKey = storageKey();
+      const tlKey = teamLocsKey();
+
+      const localEvents    = loadEvents();
+      const localTeamLocs  = loadTeamLocs();
+
+      let mergedEvents    = localEvents;
+      let mergedTeamLocs  = localTeamLocs;
+
       if (snap.exists()) {
         const data = snap.data();
-        const evKey = storageKey();
-        if (evKey && Array.isArray(data.events)) {
-          localStorage.setItem(evKey, JSON.stringify(data.events));
+
+        // Merge events: union by id, keep the copy with the later createdAt on conflict
+        if (Array.isArray(data.events)) {
+          const byId = new Map();
+          for (const e of data.events) {
+            if (e && typeof e.id === "string") byId.set(e.id, e);
+          }
+          for (const e of localEvents) {
+            const existing = byId.get(e.id);
+            if (!existing) {
+              byId.set(e.id, e);
+            } else {
+              const existingTs = existing.createdAt ? new Date(existing.createdAt).getTime() : 0;
+              const localTs    = e.createdAt        ? new Date(e.createdAt).getTime()        : 0;
+              if (localTs > existingTs) byId.set(e.id, e);
+            }
+          }
+          mergedEvents = Array.from(byId.values());
         }
-        const tlKey = teamLocsKey();
-        if (tlKey && data.teamLocs && typeof data.teamLocs === "object") {
-          localStorage.setItem(tlKey, JSON.stringify(data.teamLocs));
+
+        // Merge teamLocs: union of all keys; prefer whichever copy has coordinates
+        if (data.teamLocs && typeof data.teamLocs === "object") {
+          mergedTeamLocs = { ...data.teamLocs };
+          for (const [key, local] of Object.entries(localTeamLocs)) {
+            const remote = mergedTeamLocs[key];
+            if (!remote) {
+              mergedTeamLocs[key] = local;
+            } else {
+              const localHasCoords  = local.lat  != null && local.lng  != null;
+              const remoteHasCoords = remote.lat != null && remote.lng != null;
+              // Prefer local if it has coords, or if neither has coords (most recent edit wins)
+              if (localHasCoords || !remoteHasCoords) mergedTeamLocs[key] = local;
+            }
+          }
         }
       }
+
+      // Write merged result back to both localStorage and Firestore
+      if (evKey) localStorage.setItem(evKey, JSON.stringify(mergedEvents));
+      if (tlKey) localStorage.setItem(tlKey, JSON.stringify(mergedTeamLocs));
+      setDoc(ref, { events: mergedEvents, teamLocs: mergedTeamLocs }, { merge: true }).catch(() => {});
+
     } catch { /* fall through to whatever is in localStorage */ }
   }
 
