@@ -14,8 +14,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 </head>
 <body>
   <main id="main" class="page">
@@ -113,6 +111,7 @@
         <button class="tab-btn" type="button" data-tab="stadiums" role="tab" aria-selected="false">My Stadiums</button>
         <button class="tab-btn" type="button" data-tab="scorers" role="tab" aria-selected="false">Scorers</button>
         <button class="tab-btn" type="button" data-tab="teams" role="tab" aria-selected="false">Teams</button>
+        <button class="tab-btn" type="button" data-tab="photos" role="tab" aria-selected="false">Photos</button>
       </nav>
 
       <!-- Log Event tab -->
@@ -259,6 +258,15 @@
             Notes
             <textarea id="log-notes" rows="6" maxlength="2000" placeholder="Optional notes about the experience"></textarea>
           </label>
+          <div class="photo-upload-section">
+            <p class="field-label">Photos <span class="field-label-hint">(optional — up to 10 per event, 10 MB each)</span></p>
+            <div id="photo-previews" class="photo-previews"></div>
+            <label class="photo-add-btn" for="log-photos">
+              + Add Photos
+              <input id="log-photos" type="file" accept="image/*" multiple hidden />
+            </label>
+            <p id="photo-upload-status" class="photo-upload-status" hidden></p>
+          </div>
           <button class="btn btn-primary btn-full" type="submit">Log Event</button>
         </form>
 
@@ -325,6 +333,16 @@
         <p id="scorers-all-empty" class="empty-state" hidden>No goals logged yet. Log a soccer game and add scorers.</p>
       </section>
 
+      <!-- Photos tab -->
+      <section id="tab-photos" class="panel" role="tabpanel" hidden>
+        <div class="panel-head">
+          <h2>Photos</h2>
+          <p class="muted">All photos from your attended events, grouped by year and venue.</p>
+        </div>
+        <div id="photos-content" class="photos-content"></div>
+        <p id="photos-empty" class="empty-state" hidden>No photos yet. Add some when logging an event!</p>
+      </section>
+
       <!-- Teams tab -->
       <section id="tab-teams" class="panel" role="tabpanel" hidden>
         <div class="panel-head">
@@ -349,9 +367,19 @@
 
   </main>
 
+  <!-- Photo lightbox -->
+  <div id="photo-lightbox" class="photo-lightbox" hidden role="dialog" aria-modal="true" aria-label="Photo viewer">
+    <button id="lightbox-close" class="lightbox-close" aria-label="Close photo viewer">&times;</button>
+    <button id="lightbox-prev" class="lightbox-prev" aria-label="Previous photo">&#8249;</button>
+    <div class="lightbox-img-wrap">
+      <img id="lightbox-img" class="lightbox-img" src="" alt="" />
+    </div>
+    <button id="lightbox-next" class="lightbox-next" aria-label="Next photo">&#8250;</button>
+    <p id="lightbox-caption" class="lightbox-caption"></p>
+  </div>
+
   <script src="firebase-config.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-  <script type="module" src="app.js?v=2"></script>
+  <script type="module" src="app.js?v=6"></script>
 </body>
 </html>

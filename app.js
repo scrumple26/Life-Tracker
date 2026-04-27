@@ -13,16 +13,24 @@ import {
   getDoc,
   setDoc,
 } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+} from "https://www.gstatic.com/firebasejs/12.7.0/firebase-storage.js";
 
 // ── Firebase init ─────────────────────────────────────
 const config = window.LIFE_TRACKER_FIREBASE_CONFIG || {};
 const firebaseReady = !!(config.apiKey && config.authDomain && config.projectId);
-let auth = null;
-let db   = null;
+let auth    = null;
+let db      = null;
+let storage = null;
 if (firebaseReady) {
   const app = initializeApp(config);
-  auth = getAuth(app);
-  db   = getFirestore(app);
+  auth    = getAuth(app);
+  db      = getFirestore(app);
+  storage = getStorage(app);
 }
 
 // ── State ─────────────────────────────────────────────
@@ -199,6 +207,7 @@ const tabPanels = {
   stadiums: document.getElementById("tab-stadiums"),
   scorers:  document.getElementById("tab-scorers"),
   teams:    document.getElementById("tab-teams"),
+  photos:   document.getElementById("tab-photos"),
 };
 
 document.querySelectorAll(".tab-btn").forEach((btn) => {
@@ -215,6 +224,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     if (tab === "stadiums") renderStadiumsTab();
     if (tab === "scorers")  renderScorersTab();
     if (tab === "teams")    renderTeamsTab();
+    if (tab === "photos")   renderPhotosTab();
   });
 });
 
@@ -245,6 +255,7 @@ function loadEvents() {
       homeLineup:  Array.isArray(e.homeLineup) ? e.homeLineup : [],
       awayLineup:  Array.isArray(e.awayLineup) ? e.awayLineup : [],
       notes:       typeof e.notes === "string" ? e.notes : "",
+      photos:    Array.isArray(e.photos) ? e.photos.filter((s) => typeof s === "string") : [],
       lat:       typeof e.lat === "number" ? e.lat : null,
       lng:       typeof e.lng === "number" ? e.lng : null,
       createdAt: typeof e.createdAt === "string" ? e.createdAt : new Date().toISOString(),
@@ -316,6 +327,7 @@ function eventItemHTML(e) {
         ${scorerLine(e)}
         ${lineupLine(e)}
         ${e.notes ? `<span class="event-notes">${esc(e.notes)}</span>` : ""}
+        ${e.photos?.length ? `<span class="event-meta event-photo-count">📷 ${e.photos.length} photo${e.photos.length !== 1 ? "s" : ""}</span>` : ""}
       </div>
       <div class="event-actions">
         <button class="btn btn-sm" type="button"
@@ -381,10 +393,13 @@ logDateUnknown?.addEventListener("change", () => {
   }
 });
 
-// staged scorers and lineups for current form
+// staged scorers, lineups and photos for current form
 let stagedScorers    = [];
 let stagedHomeLineup = [];
 let stagedAwayLineup = [];
+let stagedPhotoFiles = [];  // new File objects pending upload
+let stagedPhotoUrls  = [];  // existing URLs already saved (when editing)
+const photoObjectURLs = new Map(); // File -> object URL (for preview)
 let editingEventId   = null;
 
 const logForm       = document.getElementById("log-form");
@@ -410,9 +425,14 @@ function cancelEdit() {
   stagedScorers = [];
   stagedHomeLineup = [];
   stagedAwayLineup = [];
+  stagedPhotoUrls = [];
+  stagedPhotoFiles.forEach((f) => { const u = photoObjectURLs.get(f); if (u) URL.revokeObjectURL(u); });
+  stagedPhotoFiles = [];
+  photoObjectURLs.clear();
   renderStagedScorers();
   renderStagedLineup("home");
   renderStagedLineup("away");
+  renderStagedPhotos();
   updateSoccerFields();
 }
 
@@ -463,9 +483,14 @@ function loadEventIntoForm(ev) {
   stagedScorers    = Array.isArray(ev.scorers)     ? [...ev.scorers]     : [];
   stagedHomeLineup = Array.isArray(ev.homeLineup)  ? [...ev.homeLineup]  : [];
   stagedAwayLineup = Array.isArray(ev.awayLineup)  ? [...ev.awayLineup]  : [];
+  stagedPhotoUrls  = Array.isArray(ev.photos)      ? [...ev.photos]      : [];
+  stagedPhotoFiles.forEach((f) => { const u = photoObjectURLs.get(f); if (u) URL.revokeObjectURL(u); });
+  stagedPhotoFiles = [];
+  photoObjectURLs.clear();
   renderStagedScorers();
   renderStagedLineup("home");
   renderStagedLineup("away");
+  renderStagedPhotos();
   updateSoccerFields();
   updatePenaltyLabels();
   updateLineupLabels();
@@ -596,6 +621,50 @@ lineupAwayStaged?.addEventListener("click", (e) => {
   else { stagedAwayLineup.splice(idx, 1); renderStagedLineup("away"); }
 });
 
+// ── Photo upload (form) ───────────────────────────────
+function renderStagedPhotos() {
+  const container = document.getElementById("photo-previews");
+  if (!container) return;
+  const existingHtml = stagedPhotoUrls.map((url, i) => `
+    <div class="photo-thumb">
+      <img src="${esc(url)}" alt="Photo ${i + 1}" loading="lazy" />
+      <button type="button" class="photo-thumb-remove" data-ptype="existing" data-pidx="${i}" aria-label="Remove photo">&times;</button>
+    </div>`).join("");
+  const newHtml = stagedPhotoFiles.map((f, i) => `
+    <div class="photo-thumb photo-thumb-new">
+      <img src="${esc(photoObjectURLs.get(f) || "")}" alt="New photo ${i + 1}" />
+      <button type="button" class="photo-thumb-remove" data-ptype="new" data-pidx="${i}" aria-label="Remove photo">&times;</button>
+    </div>`).join("");
+  container.innerHTML = existingHtml + newHtml;
+}
+
+const logPhotosInput = document.getElementById("log-photos");
+logPhotosInput?.addEventListener("change", () => {
+  const files = Array.from(logPhotosInput.files || []);
+  const remaining = 10 - stagedPhotoUrls.length - stagedPhotoFiles.length;
+  for (const f of files.slice(0, remaining)) {
+    if (f.size > 10 * 1024 * 1024) { alert(`"${f.name}" is too large (max 10 MB).`); continue; }
+    stagedPhotoFiles.push(f);
+    photoObjectURLs.set(f, URL.createObjectURL(f));
+  }
+  logPhotosInput.value = "";
+  renderStagedPhotos();
+});
+
+document.getElementById("photo-previews")?.addEventListener("click", (e) => {
+  const btn = e.target.closest(".photo-thumb-remove");
+  if (!btn) return;
+  const idx = parseInt(btn.dataset.pidx, 10);
+  if (btn.dataset.ptype === "existing") {
+    stagedPhotoUrls.splice(idx, 1);
+  } else {
+    const f = stagedPhotoFiles[idx];
+    if (f) { const u = photoObjectURLs.get(f); if (u) URL.revokeObjectURL(u); photoObjectURLs.delete(f); }
+    stagedPhotoFiles.splice(idx, 1);
+  }
+  renderStagedPhotos();
+});
+
 function renderRecentEvents() {
   const events = loadEvents();
   const sorted = [...events].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
@@ -634,7 +703,7 @@ function renderRecentEvents() {
   }).join("");
 }
 
-document.getElementById("log-form")?.addEventListener("submit", (e) => {
+document.getElementById("log-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!currentUser) return;
   const dateUnknown = logDateUnknown?.checked || false;
@@ -663,16 +732,45 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
     return;
   }
 
+  const evId = newId();
   const ev = {
-    id: newId(), date, sport, homeTeam, awayTeam,
+    id: evId, date, sport, homeTeam, awayTeam,
     homeScore: isNaN(homeScore) ? 0 : homeScore,
     awayScore: isNaN(awayScore) ? 0 : awayScore,
     stadium, address, side, scorers, competition, penalties,
     homeLineup: [...stagedHomeLineup],
     awayLineup: [...stagedAwayLineup],
-    notes,
+    notes, photos: [],
     lat: null, lng: null, createdAt: new Date().toISOString(),
   };
+
+  // Upload photos to Firebase Storage
+  if (storage && stagedPhotoFiles.length > 0) {
+    const statusEl = document.getElementById("photo-upload-status");
+    if (logSubmitBtn) { logSubmitBtn.disabled = true; logSubmitBtn.textContent = "Uploading photos…"; }
+    if (statusEl) { statusEl.textContent = `Uploading ${stagedPhotoFiles.length} photo(s)…`; statusEl.hidden = false; }
+    const uploadFolder = editingEventId || evId;
+    const uploadedUrls = [];
+    for (const file of stagedPhotoFiles) {
+      try {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
+        const path = `photos/${currentUser.uid}/${uploadFolder}/${Date.now()}_${safeName}`;
+        const snap = await uploadBytes(storageRef(storage, path), file);
+        uploadedUrls.push(await getDownloadURL(snap.ref));
+      } catch (err) {
+        console.error("Photo upload failed:", err);
+        if (err?.code === "storage/unauthorized") {
+          alert("Photo upload failed: make sure Firebase Storage rules allow authenticated writes.\n\nThe event will be saved without these photos.");
+          break;
+        }
+      }
+    }
+    ev.photos = [...stagedPhotoUrls, ...uploadedUrls];
+    if (logSubmitBtn) { logSubmitBtn.disabled = false; logSubmitBtn.textContent = editingEventId ? "Save Changes" : "Log Event"; }
+    if (statusEl) statusEl.hidden = true;
+  } else {
+    ev.photos = [...stagedPhotoUrls];
+  }
 
   // Save team locations if provided
   const locs = loadTeamLocs();
@@ -744,11 +842,17 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
   stagedScorers    = [];
   stagedHomeLineup = [];
   stagedAwayLineup = [];
+  stagedPhotoUrls  = [];
+  stagedPhotoFiles.forEach((f) => { const u = photoObjectURLs.get(f); if (u) URL.revokeObjectURL(u); });
+  stagedPhotoFiles = [];
+  photoObjectURLs.clear();
   renderStagedScorers();
   renderStagedLineup("home");
   renderStagedLineup("away");
+  renderStagedPhotos();
 
   renderRecentEvents();
+  if (activeTab === "photos") renderPhotosTab();
   geocodePending();
 });
 
@@ -771,6 +875,7 @@ document.addEventListener("click", (e) => {
   if (activeTab === "stadiums") renderStadiumsTab();
   if (activeTab === "scorers")  renderScorersTab();
   if (activeTab === "teams")    renderTeamsTab();
+  if (activeTab === "photos")   renderPhotosTab();
 });
 
 // ── My Stadiums tab ───────────────────────────────────
@@ -781,8 +886,9 @@ const fullEmpty    = document.getElementById("full-empty");
 const mapEmpty     = document.getElementById("map-empty");
 const mapContainer = document.getElementById("events-map");
 
-let stadiumMapInstance = null;
-let stadiumMapReady    = false;
+let stadiumMapInstance  = null;
+let stadiumMapReady     = false;
+let stadiumLayerGroup   = null;
 
 filterSport?.addEventListener("change", renderStadiumsTab);
 filterYear?.addEventListener("change",  renderStadiumsTab);
@@ -816,15 +922,19 @@ function renderStadiumsTab() {
 
 function renderStadiumMap(events) {
   const withCoords = events.filter((e) => typeof e.lat === "number" && typeof e.lng === "number");
-  const byStadium = new Map();
-  withCoords.forEach((e) => {
-    const key = `${e.stadium}|||${e.address || e.city || ""}`;
-    if (!byStadium.has(key)) byStadium.set(key, { stadium: e.stadium, address: e.address || e.city || "", lat: e.lat, lng: e.lng, events: [] });
-    byStadium.get(key).events.push(e);
-  });
-  const stadiums = [...byStadium.values()];
 
-  if (!stadiums.length) {
+  // Group by rounded coordinates so same-location venues share one marker
+  const byCoord = new Map();
+  withCoords.forEach((e) => {
+    const key = `${e.lat.toFixed(4)},${e.lng.toFixed(4)}`;
+    if (!byCoord.has(key)) byCoord.set(key, { lat: e.lat, lng: e.lng, venues: new Map() });
+    const loc = byCoord.get(key);
+    const vKey = `${e.stadium}|||${e.address || ""}`;
+    if (!loc.venues.has(vKey)) loc.venues.set(vKey, { stadium: e.stadium, address: e.address || "", events: [] });
+    loc.venues.get(vKey).events.push(e);
+  });
+
+  if (!byCoord.size) {
     if (mapContainer) mapContainer.style.display = "none";
     if (mapEmpty) mapEmpty.hidden = false;
     return;
@@ -839,18 +949,21 @@ function renderStadiumMap(events) {
       attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
       maxZoom: 19,
     }).addTo(stadiumMapInstance);
+    stadiumLayerGroup = window.L.layerGroup().addTo(stadiumMapInstance);
     stadiumMapReady = true;
   } else {
-    stadiumMapInstance.eachLayer((l) => { if (l instanceof window.L.Marker) stadiumMapInstance.removeLayer(l); });
+    stadiumLayerGroup.clearLayers();
   }
 
   const bounds = [];
-  stadiums.forEach(({ stadium, address, lat, lng, events: evts }) => {
-    const lines = [...evts].sort((a, b) => (b.date || "").localeCompare(a.date || ""))
-      .map((e) => `<b>${esc(e.homeTeam)} ${scoreDisplay(e)} ${esc(e.awayTeam)}</b><br>${sportLabel(e.sport)} · ${e.date ? formatDate(e.date) : "Date unknown"}`)
-      .join("<hr style='margin:5px 0'>");
-    window.L.marker([lat, lng]).addTo(stadiumMapInstance)
-      .bindPopup(`<b>${esc(stadium)}</b>${address ? `<br><em>${esc(address)}</em>` : ""}<hr style='margin:5px 0'>${lines}`);
+  byCoord.forEach(({ lat, lng, venues }) => {
+    const venueBlocks = [...venues.values()].map(({ stadium, address, events: evts }) => {
+      const lines = [...evts].sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+        .map((e) => `<b>${esc(e.homeTeam)} ${scoreDisplay(e)} ${esc(e.awayTeam)}</b><br>${sportLabel(e.sport)} · ${e.date ? formatDate(e.date) : "Date unknown"}`)
+        .join("<hr style='margin:4px 0'>");
+      return `<b>${esc(stadium)}</b>${address ? `<br><em>${esc(address)}</em>` : ""}<hr style='margin:5px 0'>${lines}`;
+    }).join("<hr style='margin:6px 0;border-color:#c8ecea'>");
+    window.L.marker([lat, lng]).addTo(stadiumLayerGroup).bindPopup(venueBlocks, { maxHeight: 220 });
     bounds.push([lat, lng]);
   });
 
@@ -958,7 +1071,7 @@ const teamsMapEmpty    = document.getElementById("teams-map-empty");
 let teamsView        = "list";
 let teamsMapInstance  = null;
 let teamsMapReady     = false;
-let teamsClusterGroup = null;
+let teamsLayerGroup   = null;
 
 document.querySelectorAll(".view-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -1092,37 +1205,34 @@ function renderTeamsMap() {
       attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
       maxZoom: 19,
     }).addTo(teamsMapInstance);
+    teamsLayerGroup = window.L.layerGroup().addTo(teamsMapInstance);
     teamsMapReady = true;
-  } else if (teamsClusterGroup) {
-    teamsMapInstance.removeLayer(teamsClusterGroup);
+  } else {
+    teamsLayerGroup.clearLayers();
   }
 
-  teamsClusterGroup = window.L.markerClusterGroup ? window.L.markerClusterGroup({
-    maxClusterRadius: 20,
-    iconCreateFunction(cluster) {
-      const n = cluster.getChildCount();
-      return window.L.divIcon({
-        html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 38" width="26" height="38"><path d="M13 0C5.82 0 0 5.82 0 13c0 9.75 13 25 13 25S26 22.75 26 13C26 5.82 20.18 0 13 0z" fill="#2577b8" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/><text x="13" y="17" text-anchor="middle" fill="white" font-size="10" font-weight="bold" font-family="sans-serif">${n}</text></svg>`,
-        className: "cluster-pin-icon",
-        iconSize: [26, 38],
-        iconAnchor: [13, 38],
-      });
-    },
-  }) : null;
-  const teamsTarget = teamsClusterGroup || teamsMapInstance;
-
-  const bounds = [];
+  // Group teams that share the same coordinates into one marker
+  const byLatLng = new Map();
   teams.forEach((t) => {
-    const locText = [t.loc.city, t.loc.state, t.loc.country].filter(Boolean).join(", ");
-    const gameLines = [...t.games].sort((a, b) => (b.date || "").localeCompare(a.date || ""))
-      .map((g) => `${esc(g.match)} · ${g.date ? formatDate(g.date) : "Date unknown"}`)
-      .join("<br>");
-    const popup = `<b>${esc(t.name)}</b><br><em>${esc(locText)}</em><hr style='margin:5px 0'>${gameLines}`;
-    window.L.marker([t.loc.lat, t.loc.lng]).addTo(teamsTarget).bindPopup(popup);
-    bounds.push([t.loc.lat, t.loc.lng]);
+    const key = `${t.loc.lat.toFixed(5)},${t.loc.lng.toFixed(5)}`;
+    if (!byLatLng.has(key)) byLatLng.set(key, { lat: t.loc.lat, lng: t.loc.lng, teams: [] });
+    byLatLng.get(key).teams.push(t);
   });
 
-  if (teamsClusterGroup) teamsMapInstance.addLayer(teamsClusterGroup);
+  const bounds = [];
+  byLatLng.forEach(({ lat, lng, teams: locTeams }) => {
+    const locText = [locTeams[0].loc.city, locTeams[0].loc.state, locTeams[0].loc.country].filter(Boolean).join(", ");
+    const teamBlocks = locTeams.map((t) => {
+      const gameLines = [...t.games].sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+        .map((g) => `${esc(g.match)} · ${g.date ? formatDate(g.date) : "Date unknown"}`)
+        .join("<br>");
+      return `<b>${esc(t.name)}</b><hr style='margin:4px 0'>${gameLines}`;
+    }).join("<hr style='margin:6px 0;border-color:#c8ecea'>");
+    const popup = `<em>${esc(locText)}</em><hr style='margin:5px 0'>${teamBlocks}`;
+    window.L.marker([lat, lng]).addTo(teamsLayerGroup).bindPopup(popup, { maxHeight: 220 });
+    bounds.push([lat, lng]);
+  });
+
   if (bounds.length === 1) teamsMapInstance.setView(bounds[0], 10);
   else teamsMapInstance.fitBounds(bounds, { padding: [40, 40] });
   window.requestAnimationFrame(() => teamsMapInstance.invalidateSize());
@@ -1142,14 +1252,20 @@ async function nominatimSearch(q) {
 }
 
 async function geocodeStadium(stadium, address) {
-  // Address alone geocodes much more reliably than "StadiumName StreetAddress"
+  // Try "Stadium, Address" together first — returns the actual venue, not just city center
+  if (stadium && address) {
+    const coords = await nominatimSearch(`${stadium}, ${address}`);
+    if (coords) return coords;
+    await new Promise((r) => setTimeout(r, 1200));
+  }
+  // Fall back to address alone
   if (address) {
     const coords = await nominatimSearch(address);
     if (coords) return coords;
-    // If address alone fails, wait before retrying with stadium name appended
-    await new Promise((r) => setTimeout(r, 1200));
+    if (stadium) await new Promise((r) => setTimeout(r, 1200));
   }
-  return nominatimSearch(stadium);
+  // Last resort: stadium name alone
+  return stadium ? nominatimSearch(stadium) : null;
 }
 
 async function geocodePending() {
@@ -1238,3 +1354,127 @@ async function initApp() {
   renderRecentEvents();
   geocodePending();
 }
+
+// ── Photos tab ────────────────────────────────────────
+let lightboxPhotos = [];
+let lightboxIndex  = 0;
+
+function renderPhotosTab() {
+  const content  = document.getElementById("photos-content");
+  const emptyMsg = document.getElementById("photos-empty");
+  const events   = loadEvents().filter((e) => e.photos && e.photos.length > 0);
+
+  if (!events.length) {
+    if (content)  content.innerHTML = "";
+    if (emptyMsg) emptyMsg.hidden   = false;
+    return;
+  }
+  if (emptyMsg) emptyMsg.hidden = true;
+
+  const byYear = new Map();
+  for (const e of events) {
+    const year = e.date ? e.date.slice(0, 4) : "Unknown";
+    if (!byYear.has(year)) byYear.set(year, []);
+    byYear.get(year).push(e);
+  }
+
+  const years = [...byYear.keys()].sort((a, b) => {
+    if (a === "Unknown") return 1;
+    if (b === "Unknown") return -1;
+    return b.localeCompare(a);
+  });
+
+  const allPhotos = [];
+
+  const html = years.map((year, yi) => {
+    const yearEvents = [...byYear.get(year)].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+    const byVenue = new Map();
+    for (const e of yearEvents) {
+      const venue = e.stadium || e.address || "Unknown Venue";
+      if (!byVenue.has(venue)) byVenue.set(venue, []);
+      byVenue.get(venue).push(e);
+    }
+
+    const venueHtml = [...byVenue.entries()].map(([venue, venueEvents]) => {
+      const gridItems = venueEvents.flatMap((e) =>
+        e.photos.map((url) => {
+          const idx = allPhotos.length;
+          const caption = `${e.homeTeam || "?"} ${scoreDisplay(e)} ${e.awayTeam || "?"}${e.date ? " · " + formatDate(e.date) : ""} · ${esc(venue)}`;
+          allPhotos.push({ url, caption });
+          return `<button class="photo-grid-item" type="button" data-photo-idx="${idx}" aria-label="View photo">
+            <img src="${esc(url)}" alt="${esc(caption)}" loading="lazy" />
+          </button>`;
+        })
+      ).join("");
+
+      return `<div class="photos-venue-group">
+        <p class="photos-venue-label">📍 ${esc(venue)}</p>
+        <div class="photos-grid">${gridItems}</div>
+      </div>`;
+    }).join("");
+
+    const total = yearEvents.reduce((s, e) => s + e.photos.length, 0);
+    const open  = yi === 0 ? " open" : "";
+    return `<details class="year-accordion"${open}>
+      <summary class="year-accordion-head">
+        <span class="year-label">${esc(year)}</span>
+        <span class="year-count">${total} photo${total !== 1 ? "s" : ""}</span>
+        <span class="year-chevron" aria-hidden="true">▾</span>
+      </summary>
+      <div class="photos-year-content">${venueHtml}</div>
+    </details>`;
+  }).join("");
+
+  if (content) content.innerHTML = html;
+  lightboxPhotos = allPhotos;
+}
+
+document.getElementById("photos-content")?.addEventListener("click", (e) => {
+  const btn = e.target.closest(".photo-grid-item");
+  if (!btn) return;
+  const idx = parseInt(btn.dataset.photoIdx, 10);
+  if (idx >= 0 && idx < lightboxPhotos.length) openLightbox(idx);
+});
+
+// ── Lightbox ──────────────────────────────────────────
+const lightboxEl      = document.getElementById("photo-lightbox");
+const lightboxImg     = document.getElementById("lightbox-img");
+const lightboxCaption = document.getElementById("lightbox-caption");
+const lightboxClose   = document.getElementById("lightbox-close");
+const lightboxPrev    = document.getElementById("lightbox-prev");
+const lightboxNext    = document.getElementById("lightbox-next");
+
+function openLightbox(index) {
+  showLightboxPhoto(index);
+  lightboxEl.hidden = false;
+  document.body.style.overflow = "hidden";
+  lightboxClose?.focus();
+}
+
+function closeLightbox() {
+  lightboxEl.hidden = true;
+  document.body.style.overflow = "";
+}
+
+function showLightboxPhoto(index) {
+  lightboxIndex = Math.max(0, Math.min(index, lightboxPhotos.length - 1));
+  const p = lightboxPhotos[lightboxIndex];
+  if (!p) return;
+  lightboxImg.src = p.url;
+  lightboxImg.alt = p.caption;
+  if (lightboxCaption) lightboxCaption.textContent = p.caption;
+  if (lightboxPrev) lightboxPrev.hidden = lightboxIndex === 0;
+  if (lightboxNext) lightboxNext.hidden = lightboxIndex === lightboxPhotos.length - 1;
+}
+
+lightboxClose?.addEventListener("click", closeLightbox);
+lightboxPrev?.addEventListener("click", () => showLightboxPhoto(lightboxIndex - 1));
+lightboxNext?.addEventListener("click", () => showLightboxPhoto(lightboxIndex + 1));
+lightboxEl?.addEventListener("click", (e) => { if (e.target === lightboxEl) closeLightbox(); });
+document.addEventListener("keydown", (e) => {
+  if (!lightboxEl || lightboxEl.hidden) return;
+  if (e.key === "Escape")      closeLightbox();
+  if (e.key === "ArrowLeft")   showLightboxPhoto(lightboxIndex - 1);
+  if (e.key === "ArrowRight")  showLightboxPhoto(lightboxIndex + 1);
+});
