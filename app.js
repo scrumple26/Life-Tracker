@@ -1187,6 +1187,26 @@ teamsList?.addEventListener("submit", async (e) => {
   renderTeamsTab();
 });
 
+function teamCountIcon(count) {
+  return window.L.divIcon({
+    className: "",
+    iconSize:   [26, 38],
+    iconAnchor: [13, 38],
+    popupAnchor:[0, -40],
+    html: `<div style="position:relative;width:26px;height:38px">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 38" width="26" height="38">
+        <path d="M13 0C5.82 0 0 5.82 0 13c0 9.75 13 25 13 25S26 22.75 26 13C26 5.82 20.18 0 13 0z"
+              fill="#009f94" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/>
+        <circle cx="13" cy="13" r="7" fill="rgba(255,255,255,0.25)"/>
+      </svg>
+      <div style="position:absolute;top:-7px;right:-8px;min-width:18px;height:18px;padding:0 4px;
+                  border-radius:999px;background:#e53935;color:#fff;font-size:11px;font-weight:700;
+                  display:flex;align-items:center;justify-content:center;
+                  border:2px solid #fff;font-family:sans-serif;line-height:1;box-sizing:border-box">${count}</div>
+    </div>`,
+  });
+}
+
 function renderTeamsMap() {
   const teams = aggregateTeams().filter((t) => t.loc?.lat != null);
 
@@ -1229,7 +1249,8 @@ function renderTeamsMap() {
       return `<b>${esc(t.name)}</b><hr style='margin:4px 0'>${gameLines}`;
     }).join("<hr style='margin:6px 0;border-color:#c8ecea'>");
     const popup = `<em>${esc(locText)}</em><hr style='margin:5px 0'>${teamBlocks}`;
-    window.L.marker([lat, lng]).addTo(teamsLayerGroup).bindPopup(popup, { maxHeight: 220 });
+    const icon = locTeams.length > 1 ? teamCountIcon(locTeams.length) : new window.L.Icon.Default();
+    window.L.marker([lat, lng], { icon }).addTo(teamsLayerGroup).bindPopup(popup, { maxHeight: 220 });
     bounds.push([lat, lng]);
   });
 
