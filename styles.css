@@ -441,6 +441,33 @@ textarea { resize: vertical; }
   font-style: italic;
 }
 
+/* ── Year accordion ──────────────────────────────────── */
+.events-by-year { display: grid; gap: 8px; }
+.year-accordion {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.year-accordion-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+  background: var(--surface);
+  font-weight: 700;
+  font-size: 0.95rem;
+  list-style: none;
+}
+.year-accordion-head::-webkit-details-marker { display: none; }
+.year-accordion[open] .year-accordion-head { border-bottom: 1px solid var(--line); }
+.year-label { color: var(--text); }
+.year-count { font-size: 0.82rem; font-weight: 400; color: var(--muted); flex: 1; }
+.year-chevron { color: var(--muted); font-size: 0.85rem; transition: transform 0.2s; }
+.year-accordion[open] .year-chevron { transform: rotate(-180deg); }
+.year-event-list { padding: 12px; margin: 0; }
+
 /* ── Lineup section ──────────────────────────────────── */
 .lineup-add-block { display: grid; gap: 8px; margin-bottom: 12px; }
 .lineup-team-label { font-size: 0.82rem; font-weight: 700; color: var(--muted); margin: 0; }

@@ -598,14 +598,40 @@ lineupAwayStaged?.addEventListener("click", (e) => {
 
 function renderRecentEvents() {
   const events = loadEvents();
-  const recent = [...events].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 8);
-  if (!recent.length) {
+  const sorted = [...events].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  if (!sorted.length) {
     recentList.innerHTML = "";
     recentEmpty.hidden = false;
     return;
   }
   recentEmpty.hidden = true;
-  recentList.innerHTML = recent.map(eventItemHTML).join("");
+
+  const byYear = new Map();
+  for (const e of sorted) {
+    const year = e.date ? e.date.slice(0, 4) : "Unknown";
+    if (!byYear.has(year)) byYear.set(year, []);
+    byYear.get(year).push(e);
+  }
+
+  const years = [...byYear.keys()].sort((a, b) => {
+    if (a === "Unknown") return 1;
+    if (b === "Unknown") return -1;
+    return b.localeCompare(a);
+  });
+
+  recentList.innerHTML = years.map((year, i) => {
+    const evs = byYear.get(year);
+    const open = i === 0 ? " open" : "";
+    return `
+      <details class="year-accordion"${open}>
+        <summary class="year-accordion-head">
+          <span class="year-label">${esc(year)}</span>
+          <span class="year-count">${evs.length} game${evs.length !== 1 ? "s" : ""}</span>
+          <span class="year-chevron" aria-hidden="true">▾</span>
+        </summary>
+        <ul class="event-list year-event-list">${evs.map(eventItemHTML).join("")}</ul>
+      </details>`;
+  }).join("");
 }
 
 document.getElementById("log-form")?.addEventListener("submit", (e) => {
