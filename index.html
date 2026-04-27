@@ -329,9 +329,21 @@
           <h2>Goal Scorers</h2>
           <p class="muted">Everyone you've seen score a goal, across all games.</p>
         </div>
-        <button id="export-scorers-btn" class="btn btn-sm" type="button" hidden>Export CSV</button>
-        <ul id="scorers-all-list" class="scorers-all-list"></ul>
-        <p id="scorers-all-empty" class="empty-state" hidden>No goals logged yet. Log a soccer game and add scorers.</p>
+        <div class="scorers-toolbar">
+          <div class="view-toggle">
+            <button class="view-btn active" type="button" data-sview="list">List</button>
+            <button class="view-btn" type="button" data-sview="map">Birthplace Map</button>
+          </div>
+          <button id="export-scorers-btn" class="btn btn-sm" type="button" hidden>Export CSV</button>
+        </div>
+        <div id="scorers-list-section">
+          <ul id="scorers-all-list" class="scorers-all-list"></ul>
+          <p id="scorers-all-empty" class="empty-state" hidden>No goals logged yet. Log a soccer game and add scorers.</p>
+        </div>
+        <div id="scorers-map-section" hidden>
+          <div id="scorers-map" class="map-container"></div>
+          <p id="scorers-map-empty" class="empty-state" hidden>No birthplaces set yet — add a birthplace to each scorer in the list view.</p>
+        </div>
       </section>
 
       <!-- Photos tab -->
@@ -381,6 +393,6 @@
 
   <script src="firebase-config.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script type="module" src="app.js?v=9"></script>
+  <script type="module" src="app.js?v=10"></script>
 </body>
 </html>

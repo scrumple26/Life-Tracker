@@ -570,6 +570,26 @@ textarea { resize: vertical; }
   border: 1px solid var(--line);
 }
 
+/* ── Scorers toolbar ─────────────────────────────────── */
+.scorers-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+/* ── Scorer birthplace ───────────────────────────────── */
+.scorer-birthplace {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.scorer-bp-display { font-size: 0.85rem; color: var(--muted); }
+
 /* ── Scorers all-time list ───────────────────────────── */
 .scorers-all-list { display: grid; gap: 12px; }
 .scorer-entry {

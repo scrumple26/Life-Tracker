@@ -978,6 +978,7 @@ const scorersAllEmpty = document.getElementById("scorers-all-empty");
 
 function renderScorersTab() {
   const events = loadEvents();
+  const info   = loadScorerInfo();
 
   // Aggregate all scorers across all soccer events
   const byScorer = new Map();
@@ -986,7 +987,7 @@ function renderScorersTab() {
     e.scorers.forEach((s) => {
       const key = s.name.toLowerCase().trim();
       if (!byScorer.has(key)) {
-        byScorer.set(key, { name: s.name, goals: 0, games: [] });
+        byScorer.set(key, { key, name: s.name, goals: 0, games: [] });
       }
       const entry = byScorer.get(key);
       entry.goals++;
@@ -1013,6 +1014,28 @@ function renderScorersTab() {
   scorersAllEmpty.hidden = true;
   if (exportBtn) exportBtn.hidden = false;
   scorersAllList.innerHTML = scorers.map((s) => {
+    const bp  = info[s.key] || null;
+    const bpText = bp ? [bp.city, bp.state, bp.country].filter(Boolean).join(", ") : "";
+    const birthplaceHtml = bpText
+      ? `<div class="scorer-birthplace">
+           <span class="scorer-bp-display">🌍 ${esc(bpText)}</span>
+           <button class="btn btn-sm" type="button" data-action="edit-scorer-bp" data-scorer-key="${esc(s.key)}">Edit</button>
+         </div>`
+      : `<div class="scorer-birthplace">
+           <button class="btn btn-sm" type="button" data-action="edit-scorer-bp" data-scorer-key="${esc(s.key)}">+ Add birthplace</button>
+         </div>`;
+    const formHtml = `
+      <form class="scorer-bp-form team-loc-form" data-scorer-key="${esc(s.key)}" hidden>
+        <div class="team-loc-inputs">
+          <input class="scorer-bp-city" type="text" placeholder="City" maxlength="80" value="${esc(bp?.city || "")}" />
+          <input class="scorer-bp-state" type="text" placeholder="State (optional)" maxlength="80" value="${esc(bp?.state || "")}" />
+          <input class="scorer-bp-country" type="text" placeholder="Country" maxlength="80" value="${esc(bp?.country || "")}" />
+        </div>
+        <div class="team-loc-actions">
+          <button type="submit" class="btn btn-sm btn-primary">Save</button>
+          <button type="button" class="btn btn-sm" data-action="cancel-scorer-bp">Cancel</button>
+        </div>
+      </form>`;
     const gameLines = [...s.games]
       .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
       .map((g) => {
@@ -1020,11 +1043,12 @@ function renderScorersTab() {
         return `<li class="scorer-game-line">${esc(g.match)} · <em>${esc(g.team)}${min}</em> · ${formatDate(g.date)}</li>`;
       }).join("");
     return `
-      <li class="scorer-entry">
+      <li class="scorer-entry" data-scorer-key="${esc(s.key)}">
         <div class="scorer-entry-head">
           <span class="scorer-entry-name">${esc(s.name)}</span>
           <span class="scorer-entry-count">${s.goals} ${s.goals === 1 ? "goal" : "goals"}</span>
         </div>
+        ${birthplaceHtml}${formHtml}
         <ul class="scorer-game-list">${gameLines}</ul>
       </li>`;
   }).join("");
@@ -1073,6 +1097,144 @@ function exportScorersCSV() {
 }
 
 document.getElementById("export-scorers-btn")?.addEventListener("click", exportScorersCSV);
+
+// ── Scorers view toggle + map ─────────────────────────
+const scorersListSection = document.getElementById("scorers-list-section");
+const scorersMapSection  = document.getElementById("scorers-map-section");
+const scorersMapEl       = document.getElementById("scorers-map");
+const scorersMapEmpty    = document.getElementById("scorers-map-empty");
+
+let scorersView       = "list";
+let scorersMapInstance = null;
+let scorersMapReady    = false;
+let scorersLayerGroup  = null;
+
+document.querySelectorAll("[data-sview]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    scorersView = btn.dataset.sview;
+    document.querySelectorAll("[data-sview]").forEach((b) => b.classList.toggle("active", b.dataset.sview === scorersView));
+    scorersListSection.hidden = scorersView !== "list";
+    scorersMapSection.hidden  = scorersView !== "map";
+    if (scorersView === "map") renderScorersMap();
+  });
+});
+
+// Birthplace form event delegation
+scorersAllList?.addEventListener("click", (e) => {
+  const editBtn   = e.target.closest("[data-action='edit-scorer-bp']");
+  const cancelBtn = e.target.closest("[data-action='cancel-scorer-bp']");
+  if (editBtn) {
+    const key  = editBtn.dataset.scorerKey;
+    const form = scorersAllList.querySelector(`.scorer-bp-form[data-scorer-key="${key}"]`);
+    if (form) form.hidden = false;
+  }
+  if (cancelBtn) {
+    const form = cancelBtn.closest(".scorer-bp-form");
+    if (form) form.hidden = true;
+  }
+});
+
+scorersAllList?.addEventListener("submit", async (e) => {
+  const form = e.target.closest(".scorer-bp-form");
+  if (!form) return;
+  e.preventDefault();
+  const key     = form.dataset.scorerKey;
+  const city    = form.querySelector(".scorer-bp-city")?.value.trim() || "";
+  const state   = form.querySelector(".scorer-bp-state")?.value.trim() || "";
+  const country = form.querySelector(".scorer-bp-country")?.value.trim() || "";
+  if (!city && !country) { form.hidden = true; return; }
+
+  const info = loadScorerInfo();
+  info[key] = { city, state, country, lat: null, lng: null };
+
+  const coords = await geocodeTeamLocation(city, state, country);
+  if (coords) { info[key].lat = coords.lat; info[key].lng = coords.lng; }
+  saveScorerInfo(info);
+  renderScorersTab();
+});
+
+function renderScorersMap() {
+  const info    = loadScorerInfo();
+  const events  = loadEvents();
+
+  // Build scorer list with birthplace coords
+  const byScorer = new Map();
+  events.forEach((e) => {
+    if (e.sport !== "soccer" || !e.scorers.length) return;
+    e.scorers.forEach((s) => {
+      const key = s.name.toLowerCase().trim();
+      if (!byScorer.has(key)) byScorer.set(key, { key, name: s.name, goals: 0 });
+      byScorer.get(key).goals++;
+    });
+  });
+
+  const scorers = [...byScorer.values()]
+    .map((s) => ({ ...s, bp: info[s.key] || null }))
+    .filter((s) => s.bp?.lat != null);
+
+  if (!scorers.length) {
+    if (scorersMapEl)    scorersMapEl.style.display    = "none";
+    if (scorersMapEmpty) scorersMapEmpty.hidden         = false;
+    return;
+  }
+  if (scorersMapEl)    scorersMapEl.style.display    = "";
+  if (scorersMapEmpty) scorersMapEmpty.hidden         = true;
+  if (typeof window.L === "undefined") return;
+
+  if (!scorersMapReady) {
+    scorersMapInstance = window.L.map("scorers-map").setView([20, 0], 2);
+    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(scorersMapInstance);
+    scorersLayerGroup = window.L.layerGroup().addTo(scorersMapInstance);
+    scorersMapReady = true;
+  } else {
+    scorersLayerGroup.clearLayers();
+  }
+
+  // Group scorers sharing the same coordinates
+  const byLatLng = new Map();
+  scorers.forEach((s) => {
+    const coordKey = `${s.bp.lat.toFixed(5)},${s.bp.lng.toFixed(5)}`;
+    if (!byLatLng.has(coordKey)) byLatLng.set(coordKey, { lat: s.bp.lat, lng: s.bp.lng, scorers: [] });
+    byLatLng.get(coordKey).scorers.push(s);
+  });
+
+  const bounds = [];
+  byLatLng.forEach(({ lat, lng, scorers: locScorers }) => {
+    const first   = locScorers[0];
+    const bpText  = [first.bp.city, first.bp.state, first.bp.country].filter(Boolean).join(", ");
+    const lines   = locScorers.map((s) => `<b>${esc(s.name)}</b> — ${s.goals} ${s.goals === 1 ? "goal" : "goals"}`).join("<br>");
+    const popup   = `<em>${esc(bpText)}</em><hr style='margin:5px 0'>${lines}`;
+    const icon    = locScorers.length > 1 ? teamCountIcon(locScorers.length) : new window.L.Icon.Default();
+    window.L.marker([lat, lng], { icon }).addTo(scorersLayerGroup).bindPopup(popup);
+    bounds.push([lat, lng]);
+  });
+
+  if (bounds.length === 1) scorersMapInstance.setView(bounds[0], 6);
+  else scorersMapInstance.fitBounds(bounds, { padding: [40, 40] });
+  window.requestAnimationFrame(() => scorersMapInstance.invalidateSize());
+}
+
+// ── Scorer info storage (birthplace) ─────────────────
+function scorerInfoKey() { return currentUser ? `life-tracker-scorer-info-${currentUser.uid}` : null; }
+
+function loadScorerInfo() {
+  try {
+    const key = scorerInfoKey();
+    if (!key) return {};
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveScorerInfo(info) {
+  const key = scorerInfoKey();
+  if (key) localStorage.setItem(key, JSON.stringify(info));
+  const ref = userDocRef();
+  if (ref) setDoc(ref, { scorerInfo: info }, { merge: true }).catch(() => {});
+}
 
 // ── Team locations storage ────────────────────────────
 function teamLocsKey() { return currentUser ? `life-tracker-team-locs-${currentUser.uid}` : null; }
@@ -1362,12 +1524,15 @@ async function initApp() {
       const snap = await getDoc(ref);
       const evKey = storageKey();
       const tlKey = teamLocsKey();
+      const siKey = scorerInfoKey();
 
-      const localEvents    = loadEvents();
-      const localTeamLocs  = loadTeamLocs();
+      const localEvents     = loadEvents();
+      const localTeamLocs   = loadTeamLocs();
+      const localScorerInfo = loadScorerInfo();
 
-      let mergedEvents    = localEvents;
-      let mergedTeamLocs  = localTeamLocs;
+      let mergedEvents     = localEvents;
+      let mergedTeamLocs   = localTeamLocs;
+      let mergedScorerInfo = localScorerInfo;
 
       if (snap.exists()) {
         const data = snap.data();
@@ -1401,8 +1566,22 @@ async function initApp() {
             } else {
               const localHasCoords  = local.lat  != null && local.lng  != null;
               const remoteHasCoords = remote.lat != null && remote.lng != null;
-              // Prefer local if it has coords, or if neither has coords (most recent edit wins)
               if (localHasCoords || !remoteHasCoords) mergedTeamLocs[key] = local;
+            }
+          }
+        }
+
+        // Merge scorerInfo: union of all keys; prefer whichever copy has coordinates
+        if (data.scorerInfo && typeof data.scorerInfo === "object") {
+          mergedScorerInfo = { ...data.scorerInfo };
+          for (const [key, local] of Object.entries(localScorerInfo)) {
+            const remote = mergedScorerInfo[key];
+            if (!remote) {
+              mergedScorerInfo[key] = local;
+            } else {
+              const localHasCoords  = local.lat  != null && local.lng  != null;
+              const remoteHasCoords = remote.lat != null && remote.lng != null;
+              if (localHasCoords || !remoteHasCoords) mergedScorerInfo[key] = local;
             }
           }
         }
@@ -1411,7 +1590,8 @@ async function initApp() {
       // Write merged result back to both localStorage and Firestore
       if (evKey) localStorage.setItem(evKey, JSON.stringify(mergedEvents));
       if (tlKey) localStorage.setItem(tlKey, JSON.stringify(mergedTeamLocs));
-      setDoc(ref, { events: mergedEvents, teamLocs: mergedTeamLocs }, { merge: true }).catch(() => {});
+      if (siKey) localStorage.setItem(siKey, JSON.stringify(mergedScorerInfo));
+      setDoc(ref, { events: mergedEvents, teamLocs: mergedTeamLocs, scorerInfo: mergedScorerInfo }, { merge: true }).catch(() => {});
 
     } catch { /* fall through to whatever is in localStorage */ }
   }
