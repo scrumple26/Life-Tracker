@@ -1003,12 +1003,15 @@ function renderScorersTab() {
 
   const scorers = [...byScorer.values()].sort((a, b) => b.goals - a.goals || a.name.localeCompare(b.name));
 
+  const exportBtn = document.getElementById("export-scorers-btn");
   if (!scorers.length) {
     scorersAllList.innerHTML = "";
     scorersAllEmpty.hidden = false;
+    if (exportBtn) exportBtn.hidden = true;
     return;
   }
   scorersAllEmpty.hidden = true;
+  if (exportBtn) exportBtn.hidden = false;
   scorersAllList.innerHTML = scorers.map((s) => {
     const gameLines = [...s.games]
       .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
@@ -1026,6 +1029,50 @@ function renderScorersTab() {
       </li>`;
   }).join("");
 }
+
+function exportScorersCSV() {
+  const events = loadEvents();
+  const byScorer = new Map();
+  events.forEach((e) => {
+    if (e.sport !== "soccer" || !e.scorers.length) return;
+    e.scorers.forEach((s) => {
+      const key = s.name.toLowerCase().trim();
+      if (!byScorer.has(key)) byScorer.set(key, { name: s.name, goals: 0, games: [] });
+      const entry = byScorer.get(key);
+      entry.goals++;
+      entry.games.push({
+        date: e.date,
+        match: `${e.homeTeam} ${e.homeScore ?? "?"}–${e.awayScore ?? "?"} ${e.awayTeam}`,
+        team: s.team === "home" ? e.homeTeam : e.awayTeam,
+        minute: s.minute || "",
+        stadium: e.stadium || "",
+      });
+    });
+  });
+
+  const scorers = [...byScorer.values()].sort((a, b) => b.goals - a.goals || a.name.localeCompare(b.name));
+
+  const csvCell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const rows = [["Player", "Total Goals", "Match", "Team Scored For", "Minute", "Date", "Stadium"]];
+  scorers.forEach((s) => {
+    [...s.games].sort((a, b) => (b.date || "").localeCompare(a.date || "")).forEach((g) => {
+      rows.push([s.name, s.goals, g.match, g.team, g.minute, g.date ? formatDate(g.date) : "", g.stadium]);
+    });
+  });
+
+  const csv = rows.map((r) => r.map(csvCell).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = "scorers.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById("export-scorers-btn")?.addEventListener("click", exportScorersCSV);
 
 // ── Team locations storage ────────────────────────────
 function teamLocsKey() { return currentUser ? `life-tracker-team-locs-${currentUser.uid}` : null; }
