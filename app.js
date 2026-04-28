@@ -538,7 +538,6 @@ function buildTeamMenu(side) {
     });
     wrap.appendChild(sub);
 
-    // Toggle submenu on click (touch-friendly) + show on hover (desktop)
     leagueBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       wrap.classList.toggle("tp-open");

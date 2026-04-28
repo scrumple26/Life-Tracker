@@ -465,80 +465,78 @@ textarea { resize: vertical; }
 .year-accordion[open] .year-chevron { transform: rotate(-180deg); }
 .year-event-list { padding: 12px; margin: 0; }
 
-/* ── Team picker flyout ──────────────────────────────── */
+/* ── Team picker ─────────────────────────────────────── */
 .team-picker-wrap {
   position: relative;
   display: flex;
-  align-items: center;
-  gap: 0;
+  align-items: stretch;
   margin-bottom: 4px;
 }
 .team-picker-wrap input {
   flex: 1;
   border-radius: var(--radius-sm) 0 0 var(--radius-sm);
   margin: 0;
+  min-width: 0;
 }
 .team-picker-btn {
   flex-shrink: 0;
-  padding: 0 10px;
-  height: 38px;
+  padding: 0 12px;
   background: var(--surface-strong);
   border: 1px solid var(--line);
   border-left: none;
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 1rem;
   color: var(--muted);
-  line-height: 1;
+  display: flex;
+  align-items: center;
 }
 .team-picker-btn:hover { background: var(--brand-soft); color: var(--brand-strong); }
 .team-picker-menu {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  min-width: 200px;
+  min-width: 100%;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.14);
   z-index: 200;
   padding: 4px 0;
-  max-height: 320px;
+  max-height: 360px;
   overflow-y: auto;
 }
 .tp-item {
   display: block;
   width: 100%;
+  box-sizing: border-box;
   text-align: left;
   background: none;
   border: none;
-  padding: 8px 14px;
+  padding: 9px 14px;
   font-size: 0.88rem;
   cursor: pointer;
   color: var(--text);
-  white-space: nowrap;
 }
 .tp-item:hover { background: var(--brand-soft); color: var(--brand-strong); }
-.tp-manual { color: var(--muted); font-style: italic; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
-.tp-league-wrap { position: relative; }
-.tp-league-name { font-weight: 700; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.tp-arrow { font-size: 0.7rem; opacity: 0.6; }
+.tp-manual { color: var(--muted); font-style: italic; border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 2px; }
+.tp-league-name {
+  font-weight: 700;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--line);
+}
+.tp-arrow { font-size: 0.72rem; opacity: 0.5; transition: transform 0.15s; }
+.tp-league-wrap.tp-open .tp-arrow { transform: rotate(90deg); }
 .tp-submenu {
   display: none;
-  position: absolute;
-  left: 100%;
-  top: 0;
-  min-width: 210px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
-  padding: 4px 0;
-  max-height: 320px;
-  overflow-y: auto;
-  z-index: 201;
+  background: var(--surface-soft);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 2px;
 }
-.tp-league-wrap:hover .tp-submenu,
+.tp-submenu .tp-item { padding-left: 22px; font-size: 0.84rem; }
 .tp-league-wrap.tp-open .tp-submenu { display: block; }
 
 /* ── Lineup section ──────────────────────────────────── */
