@@ -1171,6 +1171,7 @@ let scorersView       = "list";
 let scorersMapInstance = null;
 let scorersMapReady    = false;
 let scorersLayerGroup  = null;
+let scorersStatMode    = "countries"; // "countries" | "states"
 
 document.querySelectorAll("[data-sview]").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -1216,6 +1217,88 @@ scorersAllList?.addEventListener("submit", async (e) => {
   renderScorersTab();
 });
 
+const US_COUNTRY_NAMES = new Set([
+  "us", "usa", "united states", "united states of america", "u.s.", "u.s.a.", "america",
+]);
+const TOTAL_US_STATES = 50;
+const TOTAL_COUNTRIES = 195;
+
+function isUSScorer(s) {
+  return US_COUNTRY_NAMES.has((s.bp.country || "").trim().toLowerCase());
+}
+
+function renderScorersStats(scorers, el) {
+  const isCountryMode = scorersStatMode === "countries";
+  const toggleHtml = `
+    <div class="scorers-stat-toggle">
+      <button class="stat-mode-btn${isCountryMode ? " active" : ""}" type="button" data-statmode="countries">Countries</button>
+      <button class="stat-mode-btn${!isCountryMode ? " active" : ""}" type="button" data-statmode="states">US States</button>
+    </div>`;
+
+  let summaryHtml, chipsHtml;
+
+  if (isCountryMode) {
+    const byCountry = new Map();
+    scorers.forEach((s) => {
+      const c = s.bp.country?.trim() || "Unknown";
+      byCountry.set(c, (byCountry.get(c) || 0) + 1);
+    });
+    const sorted = [...byCountry.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    const total = byCountry.size;
+    const pct   = ((total / TOTAL_COUNTRIES) * 100).toFixed(1);
+    summaryHtml = `<strong>${total}</strong> / ${TOTAL_COUNTRIES} countries <span class="scorers-pct">(${pct}%)</span>`;
+    chipsHtml   = sorted.map(([c, n]) => `<span class="scorers-country-chip">${esc(c)} <strong>${n}</strong></span>`).join("");
+  } else {
+    const usScorers = scorers.filter(isUSScorer);
+    const byState = new Map();
+    usScorers.forEach((s) => {
+      const st = s.bp.state?.trim() || "Unknown";
+      byState.set(st, (byState.get(st) || 0) + 1);
+    });
+    const sorted = [...byState.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    const total = byState.size;
+    const pct   = ((total / TOTAL_US_STATES) * 100).toFixed(1);
+    summaryHtml = `<strong>${total}</strong> / ${TOTAL_US_STATES} US states <span class="scorers-pct">(${pct}%)</span>`;
+    chipsHtml   = sorted.map(([st, n]) => `<span class="scorers-country-chip">${esc(st)} <strong>${n}</strong></span>`).join("")
+      || `<span class="scorers-pct">No US birthplaces recorded yet.</span>`;
+  }
+
+  el.hidden = false;
+  el.innerHTML = `
+    <div class="scorers-stats-top">
+      <div class="scorers-map-summary">
+        <span class="scorers-stat"><strong>${scorers.length}</strong> scorer${scorers.length !== 1 ? "s" : ""}</span>
+        <span class="scorers-stat-sep">·</span>
+        <span class="scorers-stat">${summaryHtml}</span>
+      </div>
+      ${toggleHtml}
+    </div>
+    <div class="scorers-country-list">${chipsHtml}</div>`;
+}
+
+// Stat mode toggle delegation
+document.getElementById("scorers-map-section")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-statmode]");
+  if (!btn) return;
+  scorersStatMode = btn.dataset.statmode;
+  const statsEl = document.getElementById("scorers-map-stats");
+  const info    = loadScorerInfo();
+  const events  = loadEvents();
+  const byScorer = new Map();
+  events.forEach((ev) => {
+    if (ev.sport !== "soccer" || !ev.scorers.length) return;
+    ev.scorers.forEach((s) => {
+      const key = s.name.toLowerCase().trim();
+      if (!byScorer.has(key)) byScorer.set(key, { key, name: s.name, goals: 0 });
+      byScorer.get(key).goals++;
+    });
+  });
+  const scorers = [...byScorer.values()]
+    .map((s) => ({ ...s, bp: info[s.key] || null }))
+    .filter((s) => s.bp?.lat != null);
+  if (statsEl) renderScorersStats(scorers, statsEl);
+});
+
 function renderScorersMap() {
   const info    = loadScorerInfo();
   const events  = loadEvents();
@@ -1247,30 +1330,7 @@ function renderScorersMap() {
   if (scorersMapEmpty) scorersMapEmpty.hidden      = true;
   if (typeof window.L === "undefined") return;
 
-  // Build country stats
-  const byCountry = new Map();
-  scorers.forEach((s) => {
-    const country = s.bp.country?.trim() || "Unknown";
-    byCountry.set(country, (byCountry.get(country) || 0) + 1);
-  });
-  const sortedCountries = [...byCountry.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  const totalScorers  = scorers.length;
-  const totalCountries  = byCountry.size;
-  const worldCountries  = 195;
-  const pct             = ((totalCountries / worldCountries) * 100).toFixed(1);
-  const countryChips = sortedCountries.map(([country, n]) =>
-    `<span class="scorers-country-chip">${esc(country)} <strong>${n}</strong></span>`
-  ).join("");
-  if (statsEl) {
-    statsEl.hidden = false;
-    statsEl.innerHTML = `
-      <div class="scorers-map-summary">
-        <span class="scorers-stat"><strong>${totalScorers}</strong> scorer${totalScorers !== 1 ? "s" : ""}</span>
-        <span class="scorers-stat-sep">·</span>
-        <span class="scorers-stat"><strong>${totalCountries}</strong> / ${worldCountries} countries <span class="scorers-pct">(${pct}%)</span></span>
-      </div>
-      <div class="scorers-country-list">${countryChips}</div>`;
-  }
+  if (statsEl) renderScorersStats(scorers, statsEl);
 
   if (!scorersMapReady) {
     scorersMapInstance = window.L.map("scorers-map").setView([20, 0], 2);

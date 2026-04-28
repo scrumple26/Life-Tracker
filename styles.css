@@ -608,12 +608,39 @@ textarea { resize: vertical; }
   display: grid;
   gap: 8px;
 }
+.scorers-stats-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 .scorers-map-summary {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
+.scorers-stat-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.stat-mode-btn {
+  background: var(--surface);
+  border: none;
+  padding: 4px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--muted);
+  transition: background 0.15s, color 0.15s;
+}
+.stat-mode-btn + .stat-mode-btn { border-left: 1px solid var(--line); }
+.stat-mode-btn.active { background: var(--brand); color: #fff; }
 .scorers-stat { font-size: 0.9rem; }
 .scorers-stat-sep { color: var(--muted); }
 .scorers-pct { color: var(--muted); font-size: 0.85rem; }
