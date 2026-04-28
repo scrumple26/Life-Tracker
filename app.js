@@ -1235,14 +1235,40 @@ function renderScorersMap() {
     .map((s) => ({ ...s, bp: info[s.key] || null }))
     .filter((s) => s.bp?.lat != null);
 
+  const statsEl = document.getElementById("scorers-map-stats");
+
   if (!scorers.length) {
-    if (scorersMapEl)    scorersMapEl.style.display    = "none";
-    if (scorersMapEmpty) scorersMapEmpty.hidden         = false;
+    if (scorersMapEl)    scorersMapEl.style.display = "none";
+    if (scorersMapEmpty) scorersMapEmpty.hidden      = false;
+    if (statsEl)         statsEl.hidden              = true;
     return;
   }
-  if (scorersMapEl)    scorersMapEl.style.display    = "";
-  if (scorersMapEmpty) scorersMapEmpty.hidden         = true;
+  if (scorersMapEl)    scorersMapEl.style.display = "";
+  if (scorersMapEmpty) scorersMapEmpty.hidden      = true;
   if (typeof window.L === "undefined") return;
+
+  // Build country stats
+  const byCountry = new Map();
+  scorers.forEach((s) => {
+    const country = s.bp.country?.trim() || "Unknown";
+    byCountry.set(country, (byCountry.get(country) || 0) + 1);
+  });
+  const sortedCountries = [...byCountry.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const totalScorers  = scorers.length;
+  const totalCountries = byCountry.size;
+  const countryChips = sortedCountries.map(([country, n]) =>
+    `<span class="scorers-country-chip">${esc(country)} <strong>${n}</strong></span>`
+  ).join("");
+  if (statsEl) {
+    statsEl.hidden = false;
+    statsEl.innerHTML = `
+      <div class="scorers-map-summary">
+        <span class="scorers-stat"><strong>${totalScorers}</strong> scorer${totalScorers !== 1 ? "s" : ""}</span>
+        <span class="scorers-stat-sep">·</span>
+        <span class="scorers-stat"><strong>${totalCountries}</strong> countr${totalCountries !== 1 ? "ies" : "y"}</span>
+      </div>
+      <div class="scorers-country-list">${countryChips}</div>`;
+  }
 
   if (!scorersMapReady) {
     scorersMapInstance = window.L.map("scorers-map").setView([20, 0], 2);
