@@ -577,7 +577,74 @@ document.querySelectorAll(".team-picker-btn").forEach((btn) => {
 });
 
 // Close on outside click
-document.addEventListener("click", closeAllTeamMenus);
+document.addEventListener("click", () => {
+  closeAllTeamMenus();
+  closeStadiumMenu();
+});
+
+// ── Stadium picker ────────────────────────────────────
+function getKnownStadiums() {
+  const events = loadEvents();
+  const byKey  = new Map();
+  events.forEach((e) => {
+    if (!e.stadium) return;
+    const key = e.stadium.toLowerCase().trim();
+    if (!byKey.has(key)) {
+      byKey.set(key, { name: e.stadium, address: e.address || "" });
+    } else if (!byKey.get(key).address && e.address) {
+      byKey.get(key).address = e.address;
+    }
+  });
+  return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function buildStadiumMenu() {
+  const menuEl = document.getElementById("stadium-picker-menu");
+  if (!menuEl) return;
+  menuEl.innerHTML = "";
+
+  const stadiums = getKnownStadiums();
+
+  if (!stadiums.length) {
+    const empty = document.createElement("p");
+    empty.className = "tp-empty";
+    empty.textContent = "No saved stadiums yet — log an event with a stadium to save it.";
+    menuEl.appendChild(empty);
+    return;
+  }
+
+  stadiums.forEach((s) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tp-item";
+    btn.innerHTML = `<span class="tp-stadium-name">${esc(s.name)}</span>${s.address ? `<span class="tp-stadium-addr">${esc(s.address)}</span>` : ""}`;
+    btn.addEventListener("click", () => {
+      const stadiumEl = document.getElementById("log-stadium");
+      const addressEl = document.getElementById("log-address");
+      if (stadiumEl) stadiumEl.value = s.name;
+      if (addressEl) addressEl.value = s.address;
+      closeStadiumMenu();
+    });
+    menuEl.appendChild(btn);
+  });
+}
+
+function closeStadiumMenu() {
+  const menuEl = document.getElementById("stadium-picker-menu");
+  if (menuEl) menuEl.hidden = true;
+}
+
+document.getElementById("stadium-picker-btn")?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const menuEl = document.getElementById("stadium-picker-menu");
+  const isOpen = menuEl && !menuEl.hidden;
+  closeAllTeamMenus();
+  closeStadiumMenu();
+  if (!isOpen) {
+    buildStadiumMenu();
+    if (menuEl) menuEl.hidden = false;
+  }
+});
 
 function loadEventIntoForm(ev) {
   editingEventId = ev.id;

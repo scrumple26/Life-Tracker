@@ -228,7 +228,11 @@
           <div class="form-grid form-grid-2">
             <label>
               Stadium / Venue
-              <input id="log-stadium" type="text" maxlength="120" placeholder="e.g. Old Trafford" />
+              <div class="team-picker-wrap">
+                <input id="log-stadium" type="text" maxlength="120" placeholder="e.g. Old Trafford" autocomplete="off" />
+                <button type="button" class="team-picker-btn" id="stadium-picker-btn" aria-label="Pick saved stadium" tabindex="-1">&#9662;</button>
+                <div class="team-picker-menu" id="stadium-picker-menu" hidden></div>
+              </div>
             </label>
             <label>
               Stadium Address
@@ -409,6 +413,6 @@
 
   <script src="firebase-config.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script type="module" src="app.js?v=18"></script>
+  <script type="module" src="app.js?v=19"></script>
 </body>
 </html>
