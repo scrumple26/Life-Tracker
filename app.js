@@ -1078,7 +1078,7 @@ function renderScorersTab() {
   if (exportBtn) exportBtn.hidden = false;
   scorersAllList.innerHTML = scorers.map((s) => {
     const bp  = info[s.key] || null;
-    const bpText = bp ? [bp.city, bp.state, bp.country].filter(Boolean).join(", ") : "";
+    const bpText = bp ? [bp.city, normalizeState(bp.state), bp.country].filter(Boolean).join(", ") : "";
     const birthplaceHtml = bpText
       ? `<div class="scorer-birthplace">
            <span class="scorer-bp-display">🌍 ${esc(bpText)}</span>
@@ -1204,7 +1204,7 @@ scorersAllList?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const key     = form.dataset.scorerKey;
   const city    = form.querySelector(".scorer-bp-city")?.value.trim() || "";
-  const state   = form.querySelector(".scorer-bp-state")?.value.trim() || "";
+  const state   = normalizeState(form.querySelector(".scorer-bp-state")?.value.trim() || "");
   const country = form.querySelector(".scorer-bp-country")?.value.trim() || "";
   if (!city && !country) { form.hidden = true; return; }
 
@@ -1222,6 +1222,32 @@ const US_COUNTRY_NAMES = new Set([
 ]);
 const TOTAL_US_STATES = 50;
 const TOTAL_COUNTRIES = 195;
+
+const US_STATE_ABBREVS = {
+  AL:"Alabama", AK:"Alaska", AZ:"Arizona", AR:"Arkansas", CA:"California",
+  CO:"Colorado", CT:"Connecticut", DE:"Delaware", FL:"Florida", GA:"Georgia",
+  HI:"Hawaii", ID:"Idaho", IL:"Illinois", IN:"Indiana", IA:"Iowa",
+  KS:"Kansas", KY:"Kentucky", LA:"Louisiana", ME:"Maine", MD:"Maryland",
+  MA:"Massachusetts", MI:"Michigan", MN:"Minnesota", MS:"Mississippi", MO:"Missouri",
+  MT:"Montana", NE:"Nebraska", NV:"Nevada", NH:"New Hampshire", NJ:"New Jersey",
+  NM:"New Mexico", NY:"New York", NC:"North Carolina", ND:"North Dakota", OH:"Ohio",
+  OK:"Oklahoma", OR:"Oregon", PA:"Pennsylvania", RI:"Rhode Island", SC:"South Carolina",
+  SD:"South Dakota", TN:"Tennessee", TX:"Texas", UT:"Utah", VT:"Vermont",
+  VA:"Virginia", WA:"Washington", WV:"West Virginia", WI:"Wisconsin", WY:"Wyoming",
+};
+const US_STATE_BY_NAME = Object.fromEntries(
+  Object.entries(US_STATE_ABBREVS).map(([, name]) => [name.toLowerCase(), name])
+);
+
+function normalizeState(str) {
+  if (!str) return str;
+  const t = str.trim();
+  const full = US_STATE_ABBREVS[t.toUpperCase()];
+  if (full) return full;
+  const byName = US_STATE_BY_NAME[t.toLowerCase()];
+  if (byName) return byName;
+  return t;
+}
 
 function isUSScorer(s) {
   return US_COUNTRY_NAMES.has((s.bp.country || "").trim().toLowerCase());
@@ -1252,7 +1278,7 @@ function renderScorersStats(scorers, el) {
     const usScorers = scorers.filter(isUSScorer);
     const byState = new Map();
     usScorers.forEach((s) => {
-      const st = s.bp.state?.trim() || "Unknown";
+      const st = normalizeState(s.bp.state?.trim() || "") || "Unknown";
       byState.set(st, (byState.get(st) || 0) + 1);
     });
     const sorted = [...byState.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
@@ -1355,7 +1381,7 @@ function renderScorersMap() {
   const bounds = [];
   byLatLng.forEach(({ lat, lng, scorers: locScorers }) => {
     const first   = locScorers[0];
-    const bpText  = [first.bp.city, first.bp.state, first.bp.country].filter(Boolean).join(", ");
+    const bpText  = [first.bp.city, normalizeState(first.bp.state), first.bp.country].filter(Boolean).join(", ");
     const lines   = locScorers.map((s) => `<b>${esc(s.name)}</b> — ${s.goals} ${s.goals === 1 ? "goal" : "goals"}`).join("<br>");
     const popup   = `<em>${esc(bpText)}</em><hr style='margin:5px 0'>${lines}`;
     const icon    = locScorers.length > 1 ? teamCountIcon(locScorers.length) : new window.L.Icon.Default();
@@ -1472,7 +1498,7 @@ function renderTeamsTab() {
     teamsList.innerHTML = teams.map((t) => {
       const loc = t.loc;
       const locText = loc
-        ? [loc.city, loc.state, loc.country].filter(Boolean).join(", ")
+        ? [loc.city, normalizeState(loc.state), loc.country].filter(Boolean).join(", ")
         : "";
       const locHtml = locText
         ? `<div class="team-location">
@@ -1534,7 +1560,7 @@ teamsList?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const key     = form.dataset.teamKey;
   const city    = form.querySelector(".team-loc-city")?.value.trim() || "";
-  const state   = form.querySelector(".team-loc-state")?.value.trim() || "";
+  const state   = normalizeState(form.querySelector(".team-loc-state")?.value.trim() || "");
   const country = form.querySelector(".team-loc-country")?.value.trim() || "";
   if (!city && !country) { form.hidden = true; return; }
 
@@ -1598,7 +1624,7 @@ function renderTeamsMap() {
 
   const bounds = [];
   byLatLng.forEach(({ lat, lng, teams: locTeams }) => {
-    const locText = [locTeams[0].loc.city, locTeams[0].loc.state, locTeams[0].loc.country].filter(Boolean).join(", ");
+    const locText = [locTeams[0].loc.city, normalizeState(locTeams[0].loc.state), locTeams[0].loc.country].filter(Boolean).join(", ");
     const teamBlocks = locTeams.map((t) => {
       const gameLines = [...t.games].sort((a, b) => (b.date || "").localeCompare(a.date || ""))
         .map((g) => `${esc(g.match)} · ${g.date ? formatDate(g.date) : "Date unknown"}`)
