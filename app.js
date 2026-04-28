@@ -1016,6 +1016,13 @@ function renderRecentEvents() {
 document.getElementById("log-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!currentUser) return;
+
+  // Warn if scorer fields have unsaved input
+  const pendingScorer = scorerNameInput?.value.trim() || scorerMinInput?.value.trim();
+  if (pendingScorer) {
+    const go = confirm("You have a goal scorer typed but not added — log the event without adding them?");
+    if (!go) { scorerNameInput?.focus(); return; }
+  }
   const dateUnknown = logDateUnknown?.checked || false;
   const dateRaw     = logDate?.value || "";
   const date        = dateUnknown ? null : (isValidDate(dateRaw) ? dateRaw : null);
