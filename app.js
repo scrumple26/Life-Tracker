@@ -1255,7 +1255,9 @@ function renderScorersMap() {
   });
   const sortedCountries = [...byCountry.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   const totalScorers  = scorers.length;
-  const totalCountries = byCountry.size;
+  const totalCountries  = byCountry.size;
+  const worldCountries  = 195;
+  const pct             = ((totalCountries / worldCountries) * 100).toFixed(1);
   const countryChips = sortedCountries.map(([country, n]) =>
     `<span class="scorers-country-chip">${esc(country)} <strong>${n}</strong></span>`
   ).join("");
@@ -1265,7 +1267,7 @@ function renderScorersMap() {
       <div class="scorers-map-summary">
         <span class="scorers-stat"><strong>${totalScorers}</strong> scorer${totalScorers !== 1 ? "s" : ""}</span>
         <span class="scorers-stat-sep">·</span>
-        <span class="scorers-stat"><strong>${totalCountries}</strong> countr${totalCountries !== 1 ? "ies" : "y"}</span>
+        <span class="scorers-stat"><strong>${totalCountries}</strong> / ${worldCountries} countries <span class="scorers-pct">(${pct}%)</span></span>
       </div>
       <div class="scorers-country-list">${countryChips}</div>`;
   }

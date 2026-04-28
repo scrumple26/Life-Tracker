@@ -616,6 +616,7 @@ textarea { resize: vertical; }
 }
 .scorers-stat { font-size: 0.9rem; }
 .scorers-stat-sep { color: var(--muted); }
+.scorers-pct { color: var(--muted); font-size: 0.85rem; }
 .scorers-country-list {
   display: flex;
   flex-wrap: wrap;
