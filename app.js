@@ -83,6 +83,42 @@ function isValidEmail(str) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(str
 function storageKey() { return currentUser ? `life-tracker-events-${currentUser.uid}` : null; }
 function userDocRef() { return currentUser && db ? doc(db, "lifeTrackerData", currentUser.uid) : null; }
 
+// ── League presets ────────────────────────────────────
+const LEAGUE_PRESETS = {
+  MLS: [
+    { team: "Atlanta United FC",    stadium: "Mercedes-Benz Stadium",        address: "1 AMB Dr NW, Atlanta, GA 30313",                   city: "Atlanta",       state: "Georgia",        country: "USA" },
+    { team: "Austin FC",            stadium: "Q2 Stadium",                   address: "10414 McKalla Pl, Austin, TX 78758",                city: "Austin",        state: "Texas",          country: "USA" },
+    { team: "Charlotte FC",         stadium: "Bank of America Stadium",      address: "800 S Mint St, Charlotte, NC 28202",               city: "Charlotte",     state: "North Carolina", country: "USA" },
+    { team: "Chicago Fire FC",      stadium: "Soldier Field",                address: "1410 S Museum Campus Dr, Chicago, IL 60605",        city: "Chicago",       state: "Illinois",       country: "USA" },
+    { team: "FC Cincinnati",        stadium: "TQL Stadium",                  address: "1501 Central Pkwy, Cincinnati, OH 45214",          city: "Cincinnati",    state: "Ohio",           country: "USA" },
+    { team: "Colorado Rapids",      stadium: "Dick's Sporting Goods Park",   address: "6000 Victory Way, Commerce City, CO 80022",        city: "Commerce City", state: "Colorado",       country: "USA" },
+    { team: "Columbus Crew",        stadium: "Lower.com Field",              address: "96 Columbus Crew Way, Columbus, OH 43211",         city: "Columbus",      state: "Ohio",           country: "USA" },
+    { team: "D.C. United",          stadium: "Audi Field",                   address: "100 Potomac Ave SW, Washington, DC 20024",         city: "Washington",    state: "DC",             country: "USA" },
+    { team: "FC Dallas",            stadium: "Toyota Stadium",               address: "9200 World Cup Way, Frisco, TX 75034",             city: "Frisco",        state: "Texas",          country: "USA" },
+    { team: "Houston Dynamo FC",    stadium: "Shell Energy Stadium",         address: "2200 Texas Ave, Houston, TX 77003",                city: "Houston",       state: "Texas",          country: "USA" },
+    { team: "Sporting Kansas City", stadium: "Children's Mercy Park",        address: "1 Sporting Way, Kansas City, KS 66111",            city: "Kansas City",   state: "Kansas",         country: "USA" },
+    { team: "LA Galaxy",            stadium: "Dignity Health Sports Park",   address: "18400 Avalon Blvd, Carson, CA 90746",             city: "Carson",        state: "California",     country: "USA" },
+    { team: "Los Angeles FC",       stadium: "BMO Stadium",                  address: "3939 S Figueroa St, Los Angeles, CA 90037",        city: "Los Angeles",   state: "California",     country: "USA" },
+    { team: "Inter Miami CF",       stadium: "Chase Stadium",                address: "1350 NW 55th St, Fort Lauderdale, FL 33309",       city: "Fort Lauderdale", state: "Florida",      country: "USA" },
+    { team: "Minnesota United FC",  stadium: "Allianz Field",                address: "400 Snelling Ave N, St. Paul, MN 55104",           city: "St. Paul",      state: "Minnesota",      country: "USA" },
+    { team: "CF Montréal",          stadium: "Saputo Stadium",               address: "4750 Rue Sherbrooke E, Montréal, QC H1V 1A6",     city: "Montréal",      state: "Quebec",         country: "Canada" },
+    { team: "Nashville SC",         stadium: "GEODIS Park",                  address: "501 Benton Ave, Nashville, TN 37203",             city: "Nashville",     state: "Tennessee",      country: "USA" },
+    { team: "New England Revolution", stadium: "Gillette Stadium",           address: "1 Patriot Pl, Foxborough, MA 02035",              city: "Foxborough",    state: "Massachusetts",  country: "USA" },
+    { team: "New York City FC",     stadium: "Yankee Stadium",               address: "1 E 161st St, Bronx, NY 10451",                   city: "New York",      state: "New York",       country: "USA" },
+    { team: "New York Red Bulls",   stadium: "Red Bull Arena",               address: "600 Cape May St, Harrison, NJ 07029",             city: "Harrison",      state: "New Jersey",     country: "USA" },
+    { team: "Orlando City SC",      stadium: "Inter&Co Stadium",             address: "655 W Church St, Orlando, FL 32805",              city: "Orlando",       state: "Florida",        country: "USA" },
+    { team: "Philadelphia Union",   stadium: "Subaru Park",                  address: "1 Stadium Dr, Chester, PA 19013",                 city: "Chester",       state: "Pennsylvania",   country: "USA" },
+    { team: "Portland Timbers",     stadium: "Providence Park",              address: "1844 SW Morrison St, Portland, OR 97205",         city: "Portland",      state: "Oregon",         country: "USA" },
+    { team: "Real Salt Lake",       stadium: "America First Field",          address: "9256 State St, Sandy, UT 84070",                  city: "Sandy",         state: "Utah",           country: "USA" },
+    { team: "San Diego FC",         stadium: "Snapdragon Stadium",           address: "2101 Stadium Way, San Diego, CA 92108",           city: "San Diego",     state: "California",     country: "USA" },
+    { team: "San Jose Earthquakes", stadium: "PayPal Park",                  address: "1123 Coleman Ave, San Jose, CA 95110",            city: "San Jose",      state: "California",     country: "USA" },
+    { team: "Seattle Sounders FC",  stadium: "Lumen Field",                  address: "800 Occidental Ave S, Seattle, WA 98134",         city: "Seattle",       state: "Washington",     country: "USA" },
+    { team: "St. Louis City SC",    stadium: "CityPark",                     address: "2100 Olive St, St. Louis, MO 63103",              city: "St. Louis",     state: "Missouri",       country: "USA" },
+    { team: "Toronto FC",           stadium: "BMO Field",                    address: "170 Princes' Blvd, Toronto, ON M6K 3C3",          city: "Toronto",       state: "Ontario",        country: "Canada" },
+    { team: "Vancouver Whitecaps FC", stadium: "BC Place",                   address: "777 Pacific Blvd, Vancouver, BC V6B 4Y8",         city: "Vancouver",     state: "British Columbia", country: "Canada" },
+  ],
+};
+
 // ── Auth message ──────────────────────────────────────
 function setAuthMsg(text, isError = false) {
   authMsg.textContent = text;
@@ -440,7 +476,51 @@ function cancelEdit() {
   if (pasteInput)  pasteInput.value = "";
   if (pasteStatus) pasteStatus.textContent = "";
   if (pasteSection) pasteSection.hidden = true;
+  const presetLeagueEl = document.getElementById("preset-league");
+  const presetTeamEl   = document.getElementById("preset-team");
+  const presetTeamWrap = document.getElementById("preset-team-wrap");
+  if (presetLeagueEl) presetLeagueEl.value = "";
+  if (presetTeamEl)   presetTeamEl.innerHTML = '<option value="">Select team…</option>';
+  if (presetTeamWrap) presetTeamWrap.hidden = true;
 }
+
+// ── League preset handlers ────────────────────────────
+const presetLeagueEl = document.getElementById("preset-league");
+const presetTeamEl   = document.getElementById("preset-team");
+const presetTeamWrap = document.getElementById("preset-team-wrap");
+
+presetLeagueEl?.addEventListener("change", () => {
+  const league = presetLeagueEl.value;
+  if (!league || !LEAGUE_PRESETS[league]) {
+    presetTeamEl.innerHTML = '<option value="">Select team…</option>';
+    presetTeamWrap.hidden = true;
+    return;
+  }
+  presetTeamEl.innerHTML = '<option value="">Select team…</option>' +
+    LEAGUE_PRESETS[league].map((t, i) => `<option value="${i}">${esc(t.team)}</option>`).join("");
+  presetTeamWrap.hidden = false;
+});
+
+presetTeamEl?.addEventListener("change", () => {
+  const league = presetLeagueEl?.value;
+  const idx    = parseInt(presetTeamEl.value, 10);
+  if (!league || isNaN(idx)) return;
+  const p = LEAGUE_PRESETS[league]?.[idx];
+  if (!p) return;
+  const homeTeamEl    = document.getElementById("log-home-team");
+  const homeCityEl    = document.getElementById("log-home-loc-city");
+  const homeStateEl   = document.getElementById("log-home-loc-state");
+  const homeCountryEl = document.getElementById("log-home-loc-country");
+  const stadiumEl     = document.getElementById("log-stadium");
+  const addressEl     = document.getElementById("log-address");
+  if (homeTeamEl)    homeTeamEl.value    = p.team;
+  if (homeCityEl)    homeCityEl.value    = p.city;
+  if (homeStateEl)   homeStateEl.value   = p.state;
+  if (homeCountryEl) homeCountryEl.value = p.country;
+  if (stadiumEl)     stadiumEl.value     = p.stadium;
+  if (addressEl)     addressEl.value     = p.address;
+  updateSoccerFields();
+});
 
 function loadEventIntoForm(ev) {
   editingEventId = ev.id;

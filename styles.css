@@ -465,6 +465,18 @@ textarea { resize: vertical; }
 .year-accordion[open] .year-chevron { transform: rotate(-180deg); }
 .year-event-list { padding: 12px; margin: 0; }
 
+/* ── League preset row ───────────────────────────────── */
+.preset-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.preset-field { display: flex; flex-direction: column; gap: 4px; }
+.preset-label { font-size: 0.78rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.preset-select { min-width: 140px; margin: 0; }
+
 /* ── Lineup section ──────────────────────────────────── */
 .lineup-label-row {
   display: flex;

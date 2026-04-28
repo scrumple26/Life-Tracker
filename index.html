@@ -155,6 +155,22 @@
               </select>
             </label>
           </div>
+          <div class="preset-row">
+            <div class="preset-field">
+              <label class="preset-label" for="preset-league">Quick Fill</label>
+              <select id="preset-league" class="preset-select">
+                <option value="">Manual entry</option>
+                <option value="MLS">MLS</option>
+              </select>
+            </div>
+            <div class="preset-field" id="preset-team-wrap" hidden>
+              <label class="preset-label" for="preset-team">Team</label>
+              <select id="preset-team" class="preset-select">
+                <option value="">Select team…</option>
+              </select>
+            </div>
+          </div>
+
           <div class="form-grid form-grid-2">
             <div class="team-field-group">
               <label>
@@ -405,6 +421,6 @@
 
   <script src="firebase-config.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script type="module" src="app.js?v=15"></script>
+  <script type="module" src="app.js?v=16"></script>
 </body>
 </html>
