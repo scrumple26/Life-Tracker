@@ -620,7 +620,7 @@ textarea { resize: vertical; }
   color: var(--brand-strong);
 }
 .scorer-chip em { font-style: normal; opacity: 0.75; }
-.chip-remove {
+.chip-remove, .chip-edit {
   border: none;
   background: none;
   color: var(--brand-strong);
@@ -630,7 +630,29 @@ textarea { resize: vertical; }
   padding: 0;
   opacity: 0.6;
 }
-.chip-remove:hover { opacity: 1; }
+.chip-remove:hover, .chip-edit:hover { opacity: 1; }
+.chip-edit { font-size: 0.85rem; }
+
+.scorer-chip-editing {
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  background: var(--surface-soft);
+  border-color: var(--brand);
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.scorer-chip-editing input,
+.scorer-chip-editing select {
+  margin: 0;
+  font-size: 0.84rem;
+  padding: 4px 8px;
+  height: auto;
+}
+.scorer-chip-editing .scorer-edit-name { flex: 1 1 120px; min-width: 0; }
+.scorer-chip-editing .scorer-edit-team { flex: 0 1 auto; }
+.scorer-chip-editing .scorer-edit-min  { width: 56px; flex-shrink: 0; }
 
 /* ── Scorer meta in event card ───────────────────────── */
 .scorer-meta { color: var(--brand-strong); }

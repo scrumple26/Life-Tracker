@@ -459,6 +459,7 @@ function cancelEdit() {
   if (penaltiesWrap) penaltiesWrap.hidden = true;
   if (logPenaltiesCheck) logPenaltiesCheck.checked = false;
   stagedScorers = [];
+  editingScorerIdx = null;
   stagedHomeLineup = [];
   stagedAwayLineup = [];
   stagedPhotoUrls = [];
@@ -746,19 +747,37 @@ logHomeTeam?.addEventListener("blur", () =>
 logAwayTeam?.addEventListener("blur", () =>
   autoFillTeamLoc(logAwayTeam.value, logAwayLocCity, logAwayLocState, logAwayLocCountry));
 
+let editingScorerIdx = null;
+
 function renderStagedScorers() {
   if (!scorersStaged) return;
-  if (!stagedScorers.length) { scorersStaged.innerHTML = ""; return; }
+  if (!stagedScorers.length) { scorersStaged.innerHTML = ""; editingScorerIdx = null; return; }
+  const homeName = logHomeTeam?.value.trim() || "Home";
+  const awayName = logAwayTeam?.value.trim() || "Away";
   scorersStaged.innerHTML = stagedScorers.map((s, i) => {
-    const teamLabel = s.team === "home"
-      ? (logHomeTeam?.value.trim() || "Home")
-      : (logAwayTeam?.value.trim() || "Away");
+    if (i === editingScorerIdx) {
+      return `<li class="scorer-chip scorer-chip-editing">
+        <input class="scorer-edit-name" type="text" value="${esc(s.name)}" maxlength="80" placeholder="Name" />
+        <select class="scorer-edit-team">
+          <option value="home"${s.team === "home" ? " selected" : ""}>${esc(homeName)}</option>
+          <option value="away"${s.team === "away" ? " selected" : ""}>${esc(awayName)}</option>
+        </select>
+        <input class="scorer-edit-min" type="text" value="${esc(s.minute || "")}" maxlength="4" placeholder="Min" />
+        <button type="button" class="btn btn-sm btn-primary scorer-edit-save" data-scorer-idx="${i}">Save</button>
+        <button type="button" class="btn btn-sm scorer-edit-cancel">Cancel</button>
+      </li>`;
+    }
+    const teamLabel = s.team === "home" ? homeName : awayName;
     const min = s.minute ? ` ${s.minute}'` : "";
     return `<li class="scorer-chip">
       <span>⚽ ${esc(s.name)} <em>(${esc(teamLabel)}${min})</em></span>
+      <button type="button" class="chip-edit" data-scorer-idx="${i}" aria-label="Edit">✎</button>
       <button type="button" class="chip-remove" data-scorer-idx="${i}" aria-label="Remove">&times;</button>
     </li>`;
   }).join("");
+  if (editingScorerIdx !== null) {
+    scorersStaged.querySelector(".scorer-edit-name")?.focus();
+  }
 }
 
 scorerAddBtn?.addEventListener("click", () => {
@@ -774,11 +793,35 @@ scorerAddBtn?.addEventListener("click", () => {
 });
 
 scorersStaged?.addEventListener("click", (e) => {
-  const btn = e.target.closest(".chip-remove");
-  if (!btn) return;
-  const idx = parseInt(btn.dataset.scorerIdx, 10);
-  stagedScorers.splice(idx, 1);
-  renderStagedScorers();
+  const removeBtn = e.target.closest(".chip-remove");
+  const editBtn   = e.target.closest(".chip-edit");
+  const saveBtn   = e.target.closest(".scorer-edit-save");
+  const cancelBtn = e.target.closest(".scorer-edit-cancel");
+
+  if (removeBtn) {
+    const idx = parseInt(removeBtn.dataset.scorerIdx, 10);
+    stagedScorers.splice(idx, 1);
+    editingScorerIdx = null;
+    renderStagedScorers();
+  }
+  if (editBtn) {
+    editingScorerIdx = parseInt(editBtn.dataset.scorerIdx, 10);
+    renderStagedScorers();
+  }
+  if (saveBtn) {
+    const idx  = parseInt(saveBtn.dataset.scorerIdx, 10);
+    const li   = saveBtn.closest("li");
+    const name = li.querySelector(".scorer-edit-name")?.value.trim() || "";
+    const team = li.querySelector(".scorer-edit-team")?.value || "home";
+    const min  = li.querySelector(".scorer-edit-min")?.value.trim() || "";
+    if (name) stagedScorers[idx] = { name, team, minute: min };
+    editingScorerIdx = null;
+    renderStagedScorers();
+  }
+  if (cancelBtn) {
+    editingScorerIdx = null;
+    renderStagedScorers();
+  }
 });
 
 function renderStagedLineup(side) {
