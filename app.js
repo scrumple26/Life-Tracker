@@ -434,6 +434,12 @@ function cancelEdit() {
   renderStagedLineup("away");
   renderStagedPhotos();
   updateSoccerFields();
+  const pasteInput  = document.getElementById("lineup-paste-input");
+  const pasteStatus = document.getElementById("lineup-paste-status");
+  const pasteSection = document.getElementById("lineup-paste-section");
+  if (pasteInput)  pasteInput.value = "";
+  if (pasteStatus) pasteStatus.textContent = "";
+  if (pasteSection) pasteSection.hidden = true;
 }
 
 function loadEventIntoForm(ev) {
@@ -619,6 +625,63 @@ lineupAwayStaged?.addEventListener("click", (e) => {
   const idx = parseInt(btn.dataset.lineupIdx, 10);
   if (btn.dataset.lineupSide === "home") { stagedHomeLineup.splice(idx, 1); renderStagedLineup("home"); }
   else { stagedAwayLineup.splice(idx, 1); renderStagedLineup("away"); }
+});
+
+// ── Lineup paste parser ───────────────────────────────
+document.getElementById("lineup-paste-toggle")?.addEventListener("click", () => {
+  const section = document.getElementById("lineup-paste-section");
+  if (!section) return;
+  section.hidden = !section.hidden;
+  if (!section.hidden) document.getElementById("lineup-paste-input")?.focus();
+});
+
+document.getElementById("lineup-paste-btn")?.addEventListener("click", () => {
+  const textarea = document.getElementById("lineup-paste-input");
+  const status   = document.getElementById("lineup-paste-status");
+  const raw = textarea?.value || "";
+
+  const homeEntries = [];
+  const awayEntries = [];
+  let currentSide = null; // "home" | "away"
+  let isSubs = false;
+
+  for (const rawLine of raw.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const upper = line.toUpperCase();
+
+    if (/^HOME\b/.test(upper)) { currentSide = "home"; isSubs = false; continue; }
+    if (/^AWAY\b/.test(upper)) { currentSide = "away"; isSubs = false; continue; }
+    if (/^SUBS?\b|^---/.test(upper)) { isSubs = true; continue; }
+    if (!currentSide) continue;
+
+    // Strip leading numbers: "1.", "#1", "(1)", "1)" etc.
+    const stripped = line.replace(/^[(#]?\d+[.):\s]+/, "").trim();
+    if (!stripped) continue;
+
+    const [rawName, rawPos = ""] = stripped.split("|").map((s) => s.trim());
+    const name = rawName.trim();
+    if (!name) continue;
+
+    let position = rawPos;
+    if (isSubs) position = position ? `${position} (Sub)` : "Sub";
+
+    const target = currentSide === "home" ? homeEntries : awayEntries;
+    target.push({ name, position });
+  }
+
+  if (!homeEntries.length && !awayEntries.length) {
+    if (status) { status.textContent = "Nothing parsed — check the format."; status.className = "lineup-paste-status error"; }
+    return;
+  }
+
+  if (homeEntries.length) { stagedHomeLineup = homeEntries; renderStagedLineup("home"); }
+  if (awayEntries.length) { stagedAwayLineup = awayEntries; renderStagedLineup("away"); }
+
+  const parts = [];
+  if (homeEntries.length) parts.push(`${homeEntries.length} home`);
+  if (awayEntries.length) parts.push(`${awayEntries.length} away`);
+  if (status) { status.textContent = `Loaded: ${parts.join(", ")}. Scroll down to review.`; status.className = "lineup-paste-status ok"; }
 });
 
 // ── Photo upload (form) ───────────────────────────────

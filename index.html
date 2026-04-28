@@ -190,7 +190,18 @@
             </label>
           </div>
           <div id="lineup-section">
-            <p class="field-label">Lineups <span class="field-label-hint">(optional)</span></p>
+            <div class="lineup-label-row">
+              <p class="field-label" style="margin:0">Lineups <span class="field-label-hint">(optional)</span></p>
+              <button id="lineup-paste-toggle" class="btn btn-sm" type="button">Paste Lineup</button>
+            </div>
+            <div id="lineup-paste-section" hidden>
+              <textarea id="lineup-paste-input" class="lineup-paste-input" rows="12"
+                placeholder="Paste both lineups here. Format:&#10;&#10;HOME&#10;1. Player Name | GK&#10;2. Player Name | CB&#10;SUBS&#10;12. Player Name | GK&#10;&#10;AWAY&#10;1. Player Name | GK&#10;SUBS&#10;12. Player Name | GK&#10;&#10;Numbers and positions are optional. Subs get marked (Sub)."></textarea>
+              <div class="lineup-paste-actions">
+                <button id="lineup-paste-btn" class="btn btn-sm btn-primary" type="button">Parse &amp; Fill</button>
+                <span id="lineup-paste-status" class="lineup-paste-status"></span>
+              </div>
+            </div>
             <div class="lineup-add-block">
               <p class="lineup-team-label" id="lineup-home-label">Home Lineup</p>
               <div class="lineup-add-row">
@@ -393,6 +404,6 @@
 
   <script src="firebase-config.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script type="module" src="app.js?v=10"></script>
+  <script type="module" src="app.js?v=11"></script>
 </body>
 </html>

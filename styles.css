@@ -466,6 +466,24 @@ textarea { resize: vertical; }
 .year-event-list { padding: 12px; margin: 0; }
 
 /* ── Lineup section ──────────────────────────────────── */
+.lineup-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.lineup-paste-input {
+  width: 100%;
+  font-family: monospace;
+  font-size: 0.82rem;
+  resize: vertical;
+  margin-bottom: 8px;
+  box-sizing: border-box;
+}
+.lineup-paste-actions { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.lineup-paste-status { font-size: 0.82rem; }
+.lineup-paste-status.ok    { color: #2e7d32; }
+.lineup-paste-status.error { color: #c62828; }
 .lineup-add-block { display: grid; gap: 8px; margin-bottom: 12px; }
 .lineup-team-label { font-size: 0.82rem; font-weight: 700; color: var(--muted); margin: 0; }
 .lineup-add-row {
