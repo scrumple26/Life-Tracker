@@ -155,28 +155,14 @@
               </select>
             </label>
           </div>
-          <div class="preset-row">
-            <div class="preset-field">
-              <label class="preset-label" for="preset-league">Quick Fill</label>
-              <select id="preset-league" class="preset-select">
-                <option value="">Manual entry</option>
-                <option value="MLS">MLS</option>
-              </select>
-            </div>
-            <div class="preset-field" id="preset-team-wrap" hidden>
-              <label class="preset-label" for="preset-team">Team</label>
-              <select id="preset-team" class="preset-select">
-                <option value="">Select team…</option>
-              </select>
-            </div>
-          </div>
-
           <div class="form-grid form-grid-2">
             <div class="team-field-group">
-              <label>
-                Home Team
-                <input id="log-home-team" type="text" maxlength="80" placeholder="e.g. Manchester United" />
-              </label>
+              <label>Home Team</label>
+              <div class="team-picker-wrap">
+                <input id="log-home-team" type="text" maxlength="80" placeholder="e.g. Manchester United" autocomplete="off" />
+                <button type="button" class="team-picker-btn" data-side="home" aria-label="Pick from league" tabindex="-1">&#9662;</button>
+                <div class="team-picker-menu" id="home-team-menu" hidden></div>
+              </div>
               <div class="team-loc-mini">
                 <input id="log-home-loc-city"    type="text" maxlength="80" placeholder="City" />
                 <input id="log-home-loc-state"   type="text" maxlength="80" placeholder="State" />
@@ -184,10 +170,12 @@
               </div>
             </div>
             <div class="team-field-group">
-              <label>
-                Away Team
-                <input id="log-away-team" type="text" maxlength="80" placeholder="e.g. Liverpool" />
-              </label>
+              <label>Away Team</label>
+              <div class="team-picker-wrap">
+                <input id="log-away-team" type="text" maxlength="80" placeholder="e.g. Liverpool" autocomplete="off" />
+                <button type="button" class="team-picker-btn" data-side="away" aria-label="Pick from league" tabindex="-1">&#9662;</button>
+                <div class="team-picker-menu" id="away-team-menu" hidden></div>
+              </div>
               <div class="team-loc-mini">
                 <input id="log-away-loc-city"    type="text" maxlength="80" placeholder="City" />
                 <input id="log-away-loc-state"   type="text" maxlength="80" placeholder="State" />
@@ -421,6 +409,6 @@
 
   <script src="firebase-config.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script type="module" src="app.js?v=16"></script>
+  <script type="module" src="app.js?v=17"></script>
 </body>
 </html>

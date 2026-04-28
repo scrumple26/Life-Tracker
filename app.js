@@ -476,51 +476,109 @@ function cancelEdit() {
   if (pasteInput)  pasteInput.value = "";
   if (pasteStatus) pasteStatus.textContent = "";
   if (pasteSection) pasteSection.hidden = true;
-  const presetLeagueEl = document.getElementById("preset-league");
-  const presetTeamEl   = document.getElementById("preset-team");
-  const presetTeamWrap = document.getElementById("preset-team-wrap");
-  if (presetLeagueEl) presetLeagueEl.value = "";
-  if (presetTeamEl)   presetTeamEl.innerHTML = '<option value="">Select team…</option>';
-  if (presetTeamWrap) presetTeamWrap.hidden = true;
 }
 
-// ── League preset handlers ────────────────────────────
-const presetLeagueEl = document.getElementById("preset-league");
-const presetTeamEl   = document.getElementById("preset-team");
-const presetTeamWrap = document.getElementById("preset-team-wrap");
-
-presetLeagueEl?.addEventListener("change", () => {
-  const league = presetLeagueEl.value;
-  if (!league || !LEAGUE_PRESETS[league]) {
-    presetTeamEl.innerHTML = '<option value="">Select team…</option>';
-    presetTeamWrap.hidden = true;
-    return;
+// ── Team picker flyout ────────────────────────────────
+function applyTeamPreset(side, preset) {
+  const pfx   = side === "home" ? "log-home" : "log-away";
+  const teamEl    = document.getElementById(`${pfx}-team`);
+  const cityEl    = document.getElementById(`${pfx}-loc-city`);
+  const stateEl   = document.getElementById(`${pfx}-loc-state`);
+  const countryEl = document.getElementById(`${pfx}-loc-country`);
+  if (teamEl)    teamEl.value    = preset.team;
+  if (cityEl)    cityEl.value    = preset.city;
+  if (stateEl)   stateEl.value   = preset.state;
+  if (countryEl) countryEl.value = preset.country;
+  if (side === "home") {
+    const stadiumEl = document.getElementById("log-stadium");
+    const addressEl = document.getElementById("log-address");
+    if (stadiumEl) stadiumEl.value = preset.stadium;
+    if (addressEl) addressEl.value = preset.address;
   }
-  presetTeamEl.innerHTML = '<option value="">Select team…</option>' +
-    LEAGUE_PRESETS[league].map((t, i) => `<option value="${i}">${esc(t.team)}</option>`).join("");
-  presetTeamWrap.hidden = false;
+  updateSoccerFields();
+}
+
+function buildTeamMenu(side) {
+  const menuEl = document.getElementById(`${side === "home" ? "home" : "away"}-team-menu`);
+  if (!menuEl) return;
+
+  menuEl.innerHTML = "";
+
+  // Manual entry item
+  const manualBtn = document.createElement("button");
+  manualBtn.type = "button";
+  manualBtn.className = "tp-item tp-manual";
+  manualBtn.textContent = "Manual entry";
+  manualBtn.addEventListener("click", () => closeTeamMenu(side));
+  menuEl.appendChild(manualBtn);
+
+  // One league group per league
+  for (const [leagueName, teams] of Object.entries(LEAGUE_PRESETS)) {
+    const wrap = document.createElement("div");
+    wrap.className = "tp-league-wrap";
+
+    const leagueBtn = document.createElement("button");
+    leagueBtn.type = "button";
+    leagueBtn.className = "tp-item tp-league-name";
+    leagueBtn.innerHTML = `${esc(leagueName)} <span class="tp-arrow">&#9654;</span>`;
+    wrap.appendChild(leagueBtn);
+
+    const sub = document.createElement("div");
+    sub.className = "tp-submenu";
+    teams.forEach((t) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "tp-item tp-team";
+      btn.textContent = t.team;
+      btn.addEventListener("click", () => {
+        applyTeamPreset(side, t);
+        closeTeamMenu(side);
+      });
+      sub.appendChild(btn);
+    });
+    wrap.appendChild(sub);
+
+    // Toggle submenu on click (touch-friendly) + show on hover (desktop)
+    leagueBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      wrap.classList.toggle("tp-open");
+    });
+
+    menuEl.appendChild(wrap);
+  }
+}
+
+function openTeamMenu(side) {
+  const menuEl = document.getElementById(`${side}-team-menu`);
+  if (!menuEl) return;
+  buildTeamMenu(side);
+  menuEl.hidden = false;
+}
+
+function closeTeamMenu(side) {
+  const menuEl = document.getElementById(`${side}-team-menu`);
+  if (menuEl) menuEl.hidden = true;
+}
+
+function closeAllTeamMenus() {
+  closeTeamMenu("home");
+  closeTeamMenu("away");
+}
+
+// Toggle on ▾ button click
+document.querySelectorAll(".team-picker-btn").forEach((btn) => {
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const side    = btn.dataset.side;
+    const menuEl  = document.getElementById(`${side}-team-menu`);
+    const isOpen  = menuEl && !menuEl.hidden;
+    closeAllTeamMenus();
+    if (!isOpen) openTeamMenu(side);
+  });
 });
 
-presetTeamEl?.addEventListener("change", () => {
-  const league = presetLeagueEl?.value;
-  const idx    = parseInt(presetTeamEl.value, 10);
-  if (!league || isNaN(idx)) return;
-  const p = LEAGUE_PRESETS[league]?.[idx];
-  if (!p) return;
-  const homeTeamEl    = document.getElementById("log-home-team");
-  const homeCityEl    = document.getElementById("log-home-loc-city");
-  const homeStateEl   = document.getElementById("log-home-loc-state");
-  const homeCountryEl = document.getElementById("log-home-loc-country");
-  const stadiumEl     = document.getElementById("log-stadium");
-  const addressEl     = document.getElementById("log-address");
-  if (homeTeamEl)    homeTeamEl.value    = p.team;
-  if (homeCityEl)    homeCityEl.value    = p.city;
-  if (homeStateEl)   homeStateEl.value   = p.state;
-  if (homeCountryEl) homeCountryEl.value = p.country;
-  if (stadiumEl)     stadiumEl.value     = p.stadium;
-  if (addressEl)     addressEl.value     = p.address;
-  updateSoccerFields();
-});
+// Close on outside click
+document.addEventListener("click", closeAllTeamMenus);
 
 function loadEventIntoForm(ev) {
   editingEventId = ev.id;
