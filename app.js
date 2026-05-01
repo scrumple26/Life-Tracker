@@ -7,18 +7,28 @@ import {
   sendPasswordResetEmail,
   signOut,
 } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+} from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 
 // ── Firebase init ─────────────────────────────────────
 const config = window.LIFE_TRACKER_FIREBASE_CONFIG || {};
 const firebaseReady = !!(config.apiKey && config.authDomain && config.projectId);
 let auth = null;
+let db   = null;
 if (firebaseReady) {
   const app = initializeApp(config);
   auth = getAuth(app);
+  db   = getFirestore(app);
 }
 
 // ── State ─────────────────────────────────────────────
 let currentUser = null;
+let events      = [];   // in-memory cache, synced to Firestore
+let teamLocs    = {};   // in-memory cache, synced to Firestore
 
 // ── DOM refs ─────────────────────────────────────────
 const authPanel   = document.getElementById("auth-panel");
@@ -64,7 +74,6 @@ function formatDate(dateStr) {
 
 function isValidDate(str) { return /^\d{4}-\d{2}-\d{2}$/.test(str); }
 function isValidEmail(str) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(str).trim().toLowerCase()); }
-function storageKey() { return currentUser ? `life-tracker-events-${currentUser.uid}` : null; }
 
 // ── Auth message ──────────────────────────────────────
 function setAuthMsg(text, isError = false) {
@@ -74,17 +83,19 @@ function setAuthMsg(text, isError = false) {
 
 // ── Auth state ────────────────────────────────────────
 if (auth) {
-  onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, async (user) => {
     currentUser = user;
     if (user) {
       authPanel.hidden = true;
       appShell.hidden = false;
       userLabel.textContent = user.email;
-      initApp();
+      await initApp();
     } else {
       authPanel.hidden = false;
       appShell.hidden = true;
       currentUser = null;
+      events    = [];
+      teamLocs  = {};
     }
   });
 } else {
@@ -210,43 +221,38 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
 });
 
 // ── Sports events storage ─────────────────────────────
-function loadEvents() {
-  try {
-    const key = storageKey();
-    if (!key) return [];
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((e) => e && typeof e.id === "string").map((e) => ({
-      id:        String(e.id),
-      date:      isValidDate(e.date) ? e.date : null,
-      sport:     typeof e.sport === "string" ? e.sport : "other",
-      homeTeam:  typeof e.homeTeam === "string" ? e.homeTeam : "",
-      awayTeam:  typeof e.awayTeam === "string" ? e.awayTeam : "",
-      homeScore: typeof e.homeScore === "number" ? e.homeScore : null,
-      awayScore: typeof e.awayScore === "number" ? e.awayScore : null,
-      stadium:   typeof e.stadium === "string" ? e.stadium : "",
-      address:   typeof e.address === "string" ? e.address : (typeof e.city === "string" ? e.city : ""),
-      side:      ["home","away","neutral"].includes(e.side) ? e.side : "neutral",
-      // scorers: array of {name, team, minute} — or empty array
-      scorers:     Array.isArray(e.scorers) ? e.scorers : [],
-      competition: typeof e.competition === "string" ? e.competition : "",
-      penalties:   e.penalties && typeof e.penalties.home === "number" ? e.penalties : null,
-      homeLineup:  Array.isArray(e.homeLineup) ? e.homeLineup : [],
-      awayLineup:  Array.isArray(e.awayLineup) ? e.awayLineup : [],
-      notes:       typeof e.notes === "string" ? e.notes : "",
-      lat:       typeof e.lat === "number" ? e.lat : null,
-      lng:       typeof e.lng === "number" ? e.lng : null,
-      createdAt: typeof e.createdAt === "string" ? e.createdAt : new Date().toISOString(),
-    }));
-  } catch { return []; }
+function validateEvents(parsed) {
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((e) => e && typeof e.id === "string").map((e) => ({
+    id:          String(e.id),
+    date:        isValidDate(e.date) ? e.date : null,
+    sport:       typeof e.sport === "string" ? e.sport : "other",
+    homeTeam:    typeof e.homeTeam === "string" ? e.homeTeam : "",
+    awayTeam:    typeof e.awayTeam === "string" ? e.awayTeam : "",
+    homeScore:   typeof e.homeScore === "number" ? e.homeScore : null,
+    awayScore:   typeof e.awayScore === "number" ? e.awayScore : null,
+    stadium:     typeof e.stadium === "string" ? e.stadium : "",
+    address:     typeof e.address === "string" ? e.address : (typeof e.city === "string" ? e.city : ""),
+    side:        ["home","away","neutral"].includes(e.side) ? e.side : "neutral",
+    scorers:     Array.isArray(e.scorers) ? e.scorers : [],
+    competition: typeof e.competition === "string" ? e.competition : "",
+    penalties:   e.penalties && typeof e.penalties.home === "number" ? e.penalties : null,
+    homeLineup:  Array.isArray(e.homeLineup) ? e.homeLineup : [],
+    awayLineup:  Array.isArray(e.awayLineup) ? e.awayLineup : [],
+    notes:       typeof e.notes === "string" ? e.notes : "",
+    lat:         typeof e.lat === "number" ? e.lat : null,
+    lng:         typeof e.lng === "number" ? e.lng : null,
+    createdAt:   typeof e.createdAt === "string" ? e.createdAt : new Date().toISOString(),
+  }));
 }
 
-function saveEvents(events) {
-  const key = storageKey();
-  if (!key) return;
-  localStorage.setItem(key, JSON.stringify(events));
+function loadEvents() { return events; }
+
+function saveEvents(evts) {
+  events = evts;
+  if (currentUser && db) {
+    setDoc(doc(db, "users", currentUser.uid, "data", "events"), { list: evts }).catch(() => {});
+  }
 }
 
 function newId() {
@@ -878,20 +884,13 @@ function renderScorersTab() {
 }
 
 // ── Team locations storage ────────────────────────────
-function teamLocsKey() { return currentUser ? `life-tracker-team-locs-${currentUser.uid}` : null; }
-
-function loadTeamLocs() {
-  try {
-    const key = teamLocsKey();
-    if (!key) return {};
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
-}
+function loadTeamLocs() { return teamLocs; }
 
 function saveTeamLocs(locs) {
-  const key = teamLocsKey();
-  if (key) localStorage.setItem(key, JSON.stringify(locs));
+  teamLocs = locs;
+  if (currentUser && db) {
+    setDoc(doc(db, "users", currentUser.uid, "data", "teamLocs"), { locs }).catch(() => {});
+  }
 }
 
 async function geocodeTeamLocation(city, state, country) {
@@ -1132,7 +1131,43 @@ async function geocodePending() {
 }
 
 // ── App init ──────────────────────────────────────────
-function initApp() {
+async function initApp() {
+  if (currentUser && db) {
+    const uid = currentUser.uid;
+
+    // Load events
+    const evSnap = await getDoc(doc(db, "users", uid, "data", "events")).catch(() => null);
+    if (evSnap && evSnap.exists()) {
+      events = validateEvents(evSnap.data().list || []);
+    } else {
+      // One-time migration from localStorage
+      try {
+        const raw = localStorage.getItem(`life-tracker-events-${uid}`);
+        if (raw) {
+          events = validateEvents(JSON.parse(raw));
+          await setDoc(doc(db, "users", uid, "data", "events"), { list: events });
+          localStorage.removeItem(`life-tracker-events-${uid}`);
+        }
+      } catch { events = []; }
+    }
+
+    // Load team locs
+    const locsSnap = await getDoc(doc(db, "users", uid, "data", "teamLocs")).catch(() => null);
+    if (locsSnap && locsSnap.exists()) {
+      teamLocs = locsSnap.data().locs || {};
+    } else {
+      // One-time migration from localStorage
+      try {
+        const raw = localStorage.getItem(`life-tracker-team-locs-${uid}`);
+        if (raw) {
+          teamLocs = JSON.parse(raw) || {};
+          await setDoc(doc(db, "users", uid, "data", "teamLocs"), { locs: teamLocs });
+          localStorage.removeItem(`life-tracker-team-locs-${uid}`);
+        }
+      } catch { teamLocs = {}; }
+    }
+  }
+
   updateSoccerFields();
   renderRecentEvents();
   geocodePending();
