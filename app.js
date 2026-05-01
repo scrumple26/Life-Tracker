@@ -13,22 +13,28 @@ import {
   getDoc,
   setDoc,
 } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+} from "https://www.gstatic.com/firebasejs/12.7.0/firebase-storage.js";
 
 // ── Firebase init ─────────────────────────────────────
 const config = window.LIFE_TRACKER_FIREBASE_CONFIG || {};
 const firebaseReady = !!(config.apiKey && config.authDomain && config.projectId);
-let auth = null;
-let db   = null;
+let auth    = null;
+let db      = null;
+let storage = null;
 if (firebaseReady) {
   const app = initializeApp(config);
-  auth = getAuth(app);
-  db   = getFirestore(app);
+  auth    = getAuth(app);
+  db      = getFirestore(app);
+  storage = getStorage(app);
 }
 
 // ── State ─────────────────────────────────────────────
 let currentUser = null;
-let events      = [];   // in-memory cache, synced to Firestore
-let teamLocs    = {};   // in-memory cache, synced to Firestore
 
 // ── DOM refs ─────────────────────────────────────────
 const authPanel   = document.getElementById("auth-panel");
@@ -74,6 +80,44 @@ function formatDate(dateStr) {
 
 function isValidDate(str) { return /^\d{4}-\d{2}-\d{2}$/.test(str); }
 function isValidEmail(str) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(str).trim().toLowerCase()); }
+function storageKey() { return currentUser ? `life-tracker-events-${currentUser.uid}` : null; }
+function userDocRef() { return currentUser && db ? doc(db, "lifeTrackerData", currentUser.uid) : null; }
+
+// ── League presets ────────────────────────────────────
+const LEAGUE_PRESETS = {
+  MLS: [
+    { team: "Atlanta United FC",    stadium: "Mercedes-Benz Stadium",        address: "1 AMB Dr NW, Atlanta, GA 30313",                   city: "Atlanta",       state: "Georgia",        country: "USA" },
+    { team: "Austin FC",            stadium: "Q2 Stadium",                   address: "10414 McKalla Pl, Austin, TX 78758",                city: "Austin",        state: "Texas",          country: "USA" },
+    { team: "Charlotte FC",         stadium: "Bank of America Stadium",      address: "800 S Mint St, Charlotte, NC 28202",               city: "Charlotte",     state: "North Carolina", country: "USA" },
+    { team: "Chicago Fire FC",      stadium: "Soldier Field",                address: "1410 S Museum Campus Dr, Chicago, IL 60605",        city: "Chicago",       state: "Illinois",       country: "USA" },
+    { team: "FC Cincinnati",        stadium: "TQL Stadium",                  address: "1501 Central Pkwy, Cincinnati, OH 45214",          city: "Cincinnati",    state: "Ohio",           country: "USA" },
+    { team: "Colorado Rapids",      stadium: "Dick's Sporting Goods Park",   address: "6000 Victory Way, Commerce City, CO 80022",        city: "Commerce City", state: "Colorado",       country: "USA" },
+    { team: "Columbus Crew",        stadium: "Lower.com Field",              address: "96 Columbus Crew Way, Columbus, OH 43211",         city: "Columbus",      state: "Ohio",           country: "USA" },
+    { team: "D.C. United",          stadium: "Audi Field",                   address: "100 Potomac Ave SW, Washington, DC 20024",         city: "Washington",    state: "DC",             country: "USA" },
+    { team: "FC Dallas",            stadium: "Toyota Stadium",               address: "9200 World Cup Way, Frisco, TX 75034",             city: "Frisco",        state: "Texas",          country: "USA" },
+    { team: "Houston Dynamo FC",    stadium: "Shell Energy Stadium",         address: "2200 Texas Ave, Houston, TX 77003",                city: "Houston",       state: "Texas",          country: "USA" },
+    { team: "Sporting Kansas City", stadium: "Children's Mercy Park",        address: "1 Sporting Way, Kansas City, KS 66111",            city: "Kansas City",   state: "Kansas",         country: "USA" },
+    { team: "LA Galaxy",            stadium: "Dignity Health Sports Park",   address: "18400 Avalon Blvd, Carson, CA 90746",             city: "Carson",        state: "California",     country: "USA" },
+    { team: "Los Angeles FC",       stadium: "BMO Stadium",                  address: "3939 S Figueroa St, Los Angeles, CA 90037",        city: "Los Angeles",   state: "California",     country: "USA" },
+    { team: "Inter Miami CF",       stadium: "Chase Stadium",                address: "1350 NW 55th St, Fort Lauderdale, FL 33309",       city: "Fort Lauderdale", state: "Florida",      country: "USA" },
+    { team: "Minnesota United FC",  stadium: "Allianz Field",                address: "400 Snelling Ave N, St. Paul, MN 55104",           city: "St. Paul",      state: "Minnesota",      country: "USA" },
+    { team: "CF Montréal",          stadium: "Saputo Stadium",               address: "4750 Rue Sherbrooke E, Montréal, QC H1V 1A6",     city: "Montréal",      state: "Quebec",         country: "Canada" },
+    { team: "Nashville SC",         stadium: "GEODIS Park",                  address: "501 Benton Ave, Nashville, TN 37203",             city: "Nashville",     state: "Tennessee",      country: "USA" },
+    { team: "New England Revolution", stadium: "Gillette Stadium",           address: "1 Patriot Pl, Foxborough, MA 02035",              city: "Foxborough",    state: "Massachusetts",  country: "USA" },
+    { team: "New York City FC",     stadium: "Yankee Stadium",               address: "1 E 161st St, Bronx, NY 10451",                   city: "New York",      state: "New York",       country: "USA" },
+    { team: "New York Red Bulls",   stadium: "Red Bull Arena",               address: "600 Cape May St, Harrison, NJ 07029",             city: "Harrison",      state: "New Jersey",     country: "USA" },
+    { team: "Orlando City SC",      stadium: "Inter&Co Stadium",             address: "655 W Church St, Orlando, FL 32805",              city: "Orlando",       state: "Florida",        country: "USA" },
+    { team: "Philadelphia Union",   stadium: "Subaru Park",                  address: "1 Stadium Dr, Chester, PA 19013",                 city: "Chester",       state: "Pennsylvania",   country: "USA" },
+    { team: "Portland Timbers",     stadium: "Providence Park",              address: "1844 SW Morrison St, Portland, OR 97205",         city: "Portland",      state: "Oregon",         country: "USA" },
+    { team: "Real Salt Lake",       stadium: "America First Field",          address: "9256 State St, Sandy, UT 84070",                  city: "Sandy",         state: "Utah",           country: "USA" },
+    { team: "San Diego FC",         stadium: "Snapdragon Stadium",           address: "2101 Stadium Way, San Diego, CA 92108",           city: "San Diego",     state: "California",     country: "USA" },
+    { team: "San Jose Earthquakes", stadium: "PayPal Park",                  address: "1123 Coleman Ave, San Jose, CA 95110",            city: "San Jose",      state: "California",     country: "USA" },
+    { team: "Seattle Sounders FC",  stadium: "Lumen Field",                  address: "800 Occidental Ave S, Seattle, WA 98134",         city: "Seattle",       state: "Washington",     country: "USA" },
+    { team: "St. Louis City SC",    stadium: "CityPark",                     address: "2100 Olive St, St. Louis, MO 63103",              city: "St. Louis",     state: "Missouri",       country: "USA" },
+    { team: "Toronto FC",           stadium: "BMO Field",                    address: "170 Princes' Blvd, Toronto, ON M6K 3C3",          city: "Toronto",       state: "Ontario",        country: "Canada" },
+    { team: "Vancouver Whitecaps FC", stadium: "BC Place",                   address: "777 Pacific Blvd, Vancouver, BC V6B 4Y8",         city: "Vancouver",     state: "British Columbia", country: "Canada" },
+  ],
+};
 
 // ── Auth message ──────────────────────────────────────
 function setAuthMsg(text, isError = false) {
@@ -83,19 +127,17 @@ function setAuthMsg(text, isError = false) {
 
 // ── Auth state ────────────────────────────────────────
 if (auth) {
-  onAuthStateChanged(auth, async (user) => {
+  onAuthStateChanged(auth, (user) => {
     currentUser = user;
     if (user) {
       authPanel.hidden = true;
       appShell.hidden = false;
       userLabel.textContent = user.email;
-      await initApp();
+      initApp();
     } else {
       authPanel.hidden = false;
       appShell.hidden = true;
       currentUser = null;
-      events    = [];
-      teamLocs  = {};
     }
   });
 } else {
@@ -201,6 +243,7 @@ const tabPanels = {
   stadiums: document.getElementById("tab-stadiums"),
   scorers:  document.getElementById("tab-scorers"),
   teams:    document.getElementById("tab-teams"),
+  photos:   document.getElementById("tab-photos"),
 };
 
 document.querySelectorAll(".tab-btn").forEach((btn) => {
@@ -217,42 +260,51 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     if (tab === "stadiums") renderStadiumsTab();
     if (tab === "scorers")  renderScorersTab();
     if (tab === "teams")    renderTeamsTab();
+    if (tab === "photos")   renderPhotosTab();
   });
 });
 
 // ── Sports events storage ─────────────────────────────
-function validateEvents(parsed) {
-  if (!Array.isArray(parsed)) return [];
-  return parsed.filter((e) => e && typeof e.id === "string").map((e) => ({
-    id:          String(e.id),
-    date:        isValidDate(e.date) ? e.date : null,
-    sport:       typeof e.sport === "string" ? e.sport : "other",
-    homeTeam:    typeof e.homeTeam === "string" ? e.homeTeam : "",
-    awayTeam:    typeof e.awayTeam === "string" ? e.awayTeam : "",
-    homeScore:   typeof e.homeScore === "number" ? e.homeScore : null,
-    awayScore:   typeof e.awayScore === "number" ? e.awayScore : null,
-    stadium:     typeof e.stadium === "string" ? e.stadium : "",
-    address:     typeof e.address === "string" ? e.address : (typeof e.city === "string" ? e.city : ""),
-    side:        ["home","away","neutral"].includes(e.side) ? e.side : "neutral",
-    scorers:     Array.isArray(e.scorers) ? e.scorers : [],
-    competition: typeof e.competition === "string" ? e.competition : "",
-    penalties:   e.penalties && typeof e.penalties.home === "number" ? e.penalties : null,
-    homeLineup:  Array.isArray(e.homeLineup) ? e.homeLineup : [],
-    awayLineup:  Array.isArray(e.awayLineup) ? e.awayLineup : [],
-    notes:       typeof e.notes === "string" ? e.notes : "",
-    lat:         typeof e.lat === "number" ? e.lat : null,
-    lng:         typeof e.lng === "number" ? e.lng : null,
-    createdAt:   typeof e.createdAt === "string" ? e.createdAt : new Date().toISOString(),
-  }));
+function loadEvents() {
+  try {
+    const key = storageKey();
+    if (!key) return [];
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((e) => e && typeof e.id === "string").map((e) => ({
+      id:        String(e.id),
+      date:      isValidDate(e.date) ? e.date : null,
+      sport:     typeof e.sport === "string" ? e.sport : "other",
+      homeTeam:  typeof e.homeTeam === "string" ? e.homeTeam : "",
+      awayTeam:  typeof e.awayTeam === "string" ? e.awayTeam : "",
+      homeScore: typeof e.homeScore === "number" ? e.homeScore : null,
+      awayScore: typeof e.awayScore === "number" ? e.awayScore : null,
+      stadium:   typeof e.stadium === "string" ? e.stadium : "",
+      address:   typeof e.address === "string" ? e.address : (typeof e.city === "string" ? e.city : ""),
+      side:      ["home","away","neutral"].includes(e.side) ? e.side : "neutral",
+      // scorers: array of {name, team, minute} — or empty array
+      scorers:     Array.isArray(e.scorers) ? e.scorers : [],
+      competition: typeof e.competition === "string" ? e.competition : "",
+      penalties:   e.penalties && typeof e.penalties.home === "number" ? e.penalties : null,
+      homeLineup:  Array.isArray(e.homeLineup) ? e.homeLineup : [],
+      awayLineup:  Array.isArray(e.awayLineup) ? e.awayLineup : [],
+      notes:       typeof e.notes === "string" ? e.notes : "",
+      photos:    Array.isArray(e.photos) ? e.photos.filter((s) => typeof s === "string") : [],
+      lat:       typeof e.lat === "number" ? e.lat : null,
+      lng:       typeof e.lng === "number" ? e.lng : null,
+      createdAt: typeof e.createdAt === "string" ? e.createdAt : new Date().toISOString(),
+    }));
+  } catch { return []; }
 }
 
-function loadEvents() { return events; }
-
-function saveEvents(evts) {
-  events = evts;
-  if (currentUser && db) {
-    setDoc(doc(db, "users", currentUser.uid, "data", "events"), { list: evts }).catch(() => {});
-  }
+function saveEvents(events) {
+  const key = storageKey();
+  if (!key) return;
+  localStorage.setItem(key, JSON.stringify(events));
+  const ref = userDocRef();
+  if (ref) setDoc(ref, { events }, { merge: true }).catch(() => {});
 }
 
 function newId() {
@@ -311,6 +363,7 @@ function eventItemHTML(e) {
         ${scorerLine(e)}
         ${lineupLine(e)}
         ${e.notes ? `<span class="event-notes">${esc(e.notes)}</span>` : ""}
+        ${e.photos?.length ? `<span class="event-meta event-photo-count">📷 ${e.photos.length} photo${e.photos.length !== 1 ? "s" : ""}</span>` : ""}
       </div>
       <div class="event-actions">
         <button class="btn btn-sm" type="button"
@@ -376,10 +429,13 @@ logDateUnknown?.addEventListener("change", () => {
   }
 });
 
-// staged scorers and lineups for current form
+// staged scorers, lineups and photos for current form
 let stagedScorers    = [];
 let stagedHomeLineup = [];
 let stagedAwayLineup = [];
+let stagedPhotoFiles = [];  // new File objects pending upload
+let stagedPhotoUrls  = [];  // existing URLs already saved (when editing)
+const photoObjectURLs = new Map(); // File -> object URL (for preview)
 let editingEventId   = null;
 
 const logForm       = document.getElementById("log-form");
@@ -403,13 +459,193 @@ function cancelEdit() {
   if (penaltiesWrap) penaltiesWrap.hidden = true;
   if (logPenaltiesCheck) logPenaltiesCheck.checked = false;
   stagedScorers = [];
+  editingScorerIdx = null;
   stagedHomeLineup = [];
   stagedAwayLineup = [];
+  stagedPhotoUrls = [];
+  stagedPhotoFiles.forEach((f) => { const u = photoObjectURLs.get(f); if (u) URL.revokeObjectURL(u); });
+  stagedPhotoFiles = [];
+  photoObjectURLs.clear();
   renderStagedScorers();
   renderStagedLineup("home");
   renderStagedLineup("away");
+  renderStagedPhotos();
+  updateSoccerFields();
+  const pasteInput  = document.getElementById("lineup-paste-input");
+  const pasteStatus = document.getElementById("lineup-paste-status");
+  const pasteSection = document.getElementById("lineup-paste-section");
+  if (pasteInput)  pasteInput.value = "";
+  if (pasteStatus) pasteStatus.textContent = "";
+  if (pasteSection) pasteSection.hidden = true;
+}
+
+// ── Team picker flyout ────────────────────────────────
+function applyTeamPreset(side, preset) {
+  const pfx   = side === "home" ? "log-home" : "log-away";
+  const teamEl    = document.getElementById(`${pfx}-team`);
+  const cityEl    = document.getElementById(`${pfx}-loc-city`);
+  const stateEl   = document.getElementById(`${pfx}-loc-state`);
+  const countryEl = document.getElementById(`${pfx}-loc-country`);
+  if (teamEl)    teamEl.value    = preset.team;
+  if (cityEl)    cityEl.value    = preset.city;
+  if (stateEl)   stateEl.value   = preset.state;
+  if (countryEl) countryEl.value = preset.country;
+  if (side === "home") {
+    const stadiumEl = document.getElementById("log-stadium");
+    const addressEl = document.getElementById("log-address");
+    if (stadiumEl) stadiumEl.value = preset.stadium;
+    if (addressEl) addressEl.value = preset.address;
+  }
   updateSoccerFields();
 }
+
+function buildTeamMenu(side) {
+  const menuEl = document.getElementById(`${side === "home" ? "home" : "away"}-team-menu`);
+  if (!menuEl) return;
+
+  menuEl.innerHTML = "";
+
+  // Manual entry item
+  const manualBtn = document.createElement("button");
+  manualBtn.type = "button";
+  manualBtn.className = "tp-item tp-manual";
+  manualBtn.textContent = "Manual entry";
+  manualBtn.addEventListener("click", () => closeTeamMenu(side));
+  menuEl.appendChild(manualBtn);
+
+  // One league group per league
+  for (const [leagueName, teams] of Object.entries(LEAGUE_PRESETS)) {
+    const wrap = document.createElement("div");
+    wrap.className = "tp-league-wrap";
+
+    const leagueBtn = document.createElement("button");
+    leagueBtn.type = "button";
+    leagueBtn.className = "tp-item tp-league-name";
+    leagueBtn.innerHTML = `${esc(leagueName)} <span class="tp-arrow">&#9654;</span>`;
+    wrap.appendChild(leagueBtn);
+
+    const sub = document.createElement("div");
+    sub.className = "tp-submenu";
+    teams.forEach((t) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "tp-item tp-team";
+      btn.textContent = t.team;
+      btn.addEventListener("click", () => {
+        applyTeamPreset(side, t);
+        closeTeamMenu(side);
+      });
+      sub.appendChild(btn);
+    });
+    wrap.appendChild(sub);
+
+    leagueBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      wrap.classList.toggle("tp-open");
+    });
+
+    menuEl.appendChild(wrap);
+  }
+}
+
+function openTeamMenu(side) {
+  const menuEl = document.getElementById(`${side}-team-menu`);
+  if (!menuEl) return;
+  buildTeamMenu(side);
+  menuEl.hidden = false;
+}
+
+function closeTeamMenu(side) {
+  const menuEl = document.getElementById(`${side}-team-menu`);
+  if (menuEl) menuEl.hidden = true;
+}
+
+function closeAllTeamMenus() {
+  closeTeamMenu("home");
+  closeTeamMenu("away");
+}
+
+// Toggle on ▾ button click
+document.querySelectorAll(".team-picker-btn").forEach((btn) => {
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const side    = btn.dataset.side;
+    const menuEl  = document.getElementById(`${side}-team-menu`);
+    const isOpen  = menuEl && !menuEl.hidden;
+    closeAllTeamMenus();
+    if (!isOpen) openTeamMenu(side);
+  });
+});
+
+// Close on outside click
+document.addEventListener("click", () => {
+  closeAllTeamMenus();
+  closeStadiumMenu();
+});
+
+// ── Stadium picker ────────────────────────────────────
+function getKnownStadiums() {
+  const events = loadEvents();
+  const byKey  = new Map();
+  events.forEach((e) => {
+    if (!e.stadium) return;
+    const key = e.stadium.toLowerCase().trim();
+    if (!byKey.has(key)) {
+      byKey.set(key, { name: e.stadium, address: e.address || "" });
+    } else if (!byKey.get(key).address && e.address) {
+      byKey.get(key).address = e.address;
+    }
+  });
+  return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function buildStadiumMenu() {
+  const menuEl = document.getElementById("stadium-picker-menu");
+  if (!menuEl) return;
+  menuEl.innerHTML = "";
+
+  const stadiums = getKnownStadiums();
+
+  if (!stadiums.length) {
+    const empty = document.createElement("p");
+    empty.className = "tp-empty";
+    empty.textContent = "No saved stadiums yet — log an event with a stadium to save it.";
+    menuEl.appendChild(empty);
+    return;
+  }
+
+  stadiums.forEach((s) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tp-item";
+    btn.innerHTML = `<span class="tp-stadium-name">${esc(s.name)}</span>${s.address ? `<span class="tp-stadium-addr">${esc(s.address)}</span>` : ""}`;
+    btn.addEventListener("click", () => {
+      const stadiumEl = document.getElementById("log-stadium");
+      const addressEl = document.getElementById("log-address");
+      if (stadiumEl) stadiumEl.value = s.name;
+      if (addressEl) addressEl.value = s.address;
+      closeStadiumMenu();
+    });
+    menuEl.appendChild(btn);
+  });
+}
+
+function closeStadiumMenu() {
+  const menuEl = document.getElementById("stadium-picker-menu");
+  if (menuEl) menuEl.hidden = true;
+}
+
+document.getElementById("stadium-picker-btn")?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const menuEl = document.getElementById("stadium-picker-menu");
+  const isOpen = menuEl && !menuEl.hidden;
+  closeAllTeamMenus();
+  closeStadiumMenu();
+  if (!isOpen) {
+    buildStadiumMenu();
+    if (menuEl) menuEl.hidden = false;
+  }
+});
 
 function loadEventIntoForm(ev) {
   editingEventId = ev.id;
@@ -458,9 +694,14 @@ function loadEventIntoForm(ev) {
   stagedScorers    = Array.isArray(ev.scorers)     ? [...ev.scorers]     : [];
   stagedHomeLineup = Array.isArray(ev.homeLineup)  ? [...ev.homeLineup]  : [];
   stagedAwayLineup = Array.isArray(ev.awayLineup)  ? [...ev.awayLineup]  : [];
+  stagedPhotoUrls  = Array.isArray(ev.photos)      ? [...ev.photos]      : [];
+  stagedPhotoFiles.forEach((f) => { const u = photoObjectURLs.get(f); if (u) URL.revokeObjectURL(u); });
+  stagedPhotoFiles = [];
+  photoObjectURLs.clear();
   renderStagedScorers();
   renderStagedLineup("home");
   renderStagedLineup("away");
+  renderStagedPhotos();
   updateSoccerFields();
   updatePenaltyLabels();
   updateLineupLabels();
@@ -506,19 +747,37 @@ logHomeTeam?.addEventListener("blur", () =>
 logAwayTeam?.addEventListener("blur", () =>
   autoFillTeamLoc(logAwayTeam.value, logAwayLocCity, logAwayLocState, logAwayLocCountry));
 
+let editingScorerIdx = null;
+
 function renderStagedScorers() {
   if (!scorersStaged) return;
-  if (!stagedScorers.length) { scorersStaged.innerHTML = ""; return; }
+  if (!stagedScorers.length) { scorersStaged.innerHTML = ""; editingScorerIdx = null; return; }
+  const homeName = logHomeTeam?.value.trim() || "Home";
+  const awayName = logAwayTeam?.value.trim() || "Away";
   scorersStaged.innerHTML = stagedScorers.map((s, i) => {
-    const teamLabel = s.team === "home"
-      ? (logHomeTeam?.value.trim() || "Home")
-      : (logAwayTeam?.value.trim() || "Away");
+    if (i === editingScorerIdx) {
+      return `<li class="scorer-chip scorer-chip-editing">
+        <input class="scorer-edit-name" type="text" value="${esc(s.name)}" maxlength="80" placeholder="Name" />
+        <select class="scorer-edit-team">
+          <option value="home"${s.team === "home" ? " selected" : ""}>${esc(homeName)}</option>
+          <option value="away"${s.team === "away" ? " selected" : ""}>${esc(awayName)}</option>
+        </select>
+        <input class="scorer-edit-min" type="text" value="${esc(s.minute || "")}" maxlength="4" placeholder="Min" />
+        <button type="button" class="btn btn-sm btn-primary scorer-edit-save" data-scorer-idx="${i}">Save</button>
+        <button type="button" class="btn btn-sm scorer-edit-cancel">Cancel</button>
+      </li>`;
+    }
+    const teamLabel = s.team === "home" ? homeName : awayName;
     const min = s.minute ? ` ${s.minute}'` : "";
     return `<li class="scorer-chip">
       <span>⚽ ${esc(s.name)} <em>(${esc(teamLabel)}${min})</em></span>
+      <button type="button" class="chip-edit" data-scorer-idx="${i}" aria-label="Edit">✎</button>
       <button type="button" class="chip-remove" data-scorer-idx="${i}" aria-label="Remove">&times;</button>
     </li>`;
   }).join("");
+  if (editingScorerIdx !== null) {
+    scorersStaged.querySelector(".scorer-edit-name")?.focus();
+  }
 }
 
 scorerAddBtn?.addEventListener("click", () => {
@@ -534,11 +793,35 @@ scorerAddBtn?.addEventListener("click", () => {
 });
 
 scorersStaged?.addEventListener("click", (e) => {
-  const btn = e.target.closest(".chip-remove");
-  if (!btn) return;
-  const idx = parseInt(btn.dataset.scorerIdx, 10);
-  stagedScorers.splice(idx, 1);
-  renderStagedScorers();
+  const removeBtn = e.target.closest(".chip-remove");
+  const editBtn   = e.target.closest(".chip-edit");
+  const saveBtn   = e.target.closest(".scorer-edit-save");
+  const cancelBtn = e.target.closest(".scorer-edit-cancel");
+
+  if (removeBtn) {
+    const idx = parseInt(removeBtn.dataset.scorerIdx, 10);
+    stagedScorers.splice(idx, 1);
+    editingScorerIdx = null;
+    renderStagedScorers();
+  }
+  if (editBtn) {
+    editingScorerIdx = parseInt(editBtn.dataset.scorerIdx, 10);
+    renderStagedScorers();
+  }
+  if (saveBtn) {
+    const idx  = parseInt(saveBtn.dataset.scorerIdx, 10);
+    const li   = saveBtn.closest("li");
+    const name = li.querySelector(".scorer-edit-name")?.value.trim() || "";
+    const team = li.querySelector(".scorer-edit-team")?.value || "home";
+    const min  = li.querySelector(".scorer-edit-min")?.value.trim() || "";
+    if (name) stagedScorers[idx] = { name, team, minute: min };
+    editingScorerIdx = null;
+    renderStagedScorers();
+  }
+  if (cancelBtn) {
+    editingScorerIdx = null;
+    renderStagedScorers();
+  }
 });
 
 function renderStagedLineup(side) {
@@ -591,21 +874,155 @@ lineupAwayStaged?.addEventListener("click", (e) => {
   else { stagedAwayLineup.splice(idx, 1); renderStagedLineup("away"); }
 });
 
+// ── Lineup paste parser ───────────────────────────────
+document.getElementById("lineup-paste-toggle")?.addEventListener("click", () => {
+  const section = document.getElementById("lineup-paste-section");
+  if (!section) return;
+  section.hidden = !section.hidden;
+  if (!section.hidden) document.getElementById("lineup-paste-input")?.focus();
+});
+
+document.getElementById("lineup-paste-btn")?.addEventListener("click", () => {
+  const textarea = document.getElementById("lineup-paste-input");
+  const status   = document.getElementById("lineup-paste-status");
+  const raw = textarea?.value || "";
+
+  const homeEntries = [];
+  const awayEntries = [];
+  let currentSide = null; // "home" | "away"
+  let isSubs = false;
+
+  for (const rawLine of raw.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const upper = line.toUpperCase();
+
+    if (/^HOME\b/.test(upper)) { currentSide = "home"; isSubs = false; continue; }
+    if (/^AWAY\b/.test(upper)) { currentSide = "away"; isSubs = false; continue; }
+    if (/^SUBS?\b|^---/.test(upper)) { isSubs = true; continue; }
+    if (!currentSide) continue;
+
+    // Strip leading numbers: "1.", "#1", "(1)", "1)" etc.
+    const stripped = line.replace(/^[(#]?\d+[.):\s]+/, "").trim();
+    if (!stripped) continue;
+
+    const [rawName, rawPos = ""] = stripped.split("|").map((s) => s.trim());
+    const name = rawName.trim();
+    if (!name) continue;
+
+    let position = rawPos;
+    if (isSubs) position = position ? `${position} (Sub)` : "Sub";
+
+    const target = currentSide === "home" ? homeEntries : awayEntries;
+    target.push({ name, position });
+  }
+
+  if (!homeEntries.length && !awayEntries.length) {
+    if (status) { status.textContent = "Nothing parsed — check the format."; status.className = "lineup-paste-status error"; }
+    return;
+  }
+
+  if (homeEntries.length) { stagedHomeLineup = homeEntries; renderStagedLineup("home"); }
+  if (awayEntries.length) { stagedAwayLineup = awayEntries; renderStagedLineup("away"); }
+
+  const parts = [];
+  if (homeEntries.length) parts.push(`${homeEntries.length} home`);
+  if (awayEntries.length) parts.push(`${awayEntries.length} away`);
+  if (status) { status.textContent = `Loaded: ${parts.join(", ")}. Scroll down to review.`; status.className = "lineup-paste-status ok"; }
+});
+
+// ── Photo upload (form) ───────────────────────────────
+function renderStagedPhotos() {
+  const container = document.getElementById("photo-previews");
+  if (!container) return;
+  const existingHtml = stagedPhotoUrls.map((url, i) => `
+    <div class="photo-thumb">
+      <img src="${esc(url)}" alt="Photo ${i + 1}" loading="lazy" />
+      <button type="button" class="photo-thumb-remove" data-ptype="existing" data-pidx="${i}" aria-label="Remove photo">&times;</button>
+    </div>`).join("");
+  const newHtml = stagedPhotoFiles.map((f, i) => `
+    <div class="photo-thumb photo-thumb-new">
+      <img src="${esc(photoObjectURLs.get(f) || "")}" alt="New photo ${i + 1}" />
+      <button type="button" class="photo-thumb-remove" data-ptype="new" data-pidx="${i}" aria-label="Remove photo">&times;</button>
+    </div>`).join("");
+  container.innerHTML = existingHtml + newHtml;
+}
+
+const logPhotosInput = document.getElementById("log-photos");
+logPhotosInput?.addEventListener("change", () => {
+  const files = Array.from(logPhotosInput.files || []);
+  const remaining = 10 - stagedPhotoUrls.length - stagedPhotoFiles.length;
+  for (const f of files.slice(0, remaining)) {
+    if (f.size > 10 * 1024 * 1024) { alert(`"${f.name}" is too large (max 10 MB).`); continue; }
+    stagedPhotoFiles.push(f);
+    photoObjectURLs.set(f, URL.createObjectURL(f));
+  }
+  logPhotosInput.value = "";
+  renderStagedPhotos();
+});
+
+document.getElementById("photo-previews")?.addEventListener("click", (e) => {
+  const btn = e.target.closest(".photo-thumb-remove");
+  if (!btn) return;
+  const idx = parseInt(btn.dataset.pidx, 10);
+  if (btn.dataset.ptype === "existing") {
+    stagedPhotoUrls.splice(idx, 1);
+  } else {
+    const f = stagedPhotoFiles[idx];
+    if (f) { const u = photoObjectURLs.get(f); if (u) URL.revokeObjectURL(u); photoObjectURLs.delete(f); }
+    stagedPhotoFiles.splice(idx, 1);
+  }
+  renderStagedPhotos();
+});
+
 function renderRecentEvents() {
   const events = loadEvents();
-  const recent = [...events].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 8);
-  if (!recent.length) {
+  const sorted = [...events].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  if (!sorted.length) {
     recentList.innerHTML = "";
     recentEmpty.hidden = false;
     return;
   }
   recentEmpty.hidden = true;
-  recentList.innerHTML = recent.map(eventItemHTML).join("");
+
+  const byYear = new Map();
+  for (const e of sorted) {
+    const year = e.date ? e.date.slice(0, 4) : "Unknown";
+    if (!byYear.has(year)) byYear.set(year, []);
+    byYear.get(year).push(e);
+  }
+
+  const years = [...byYear.keys()].sort((a, b) => {
+    if (a === "Unknown") return 1;
+    if (b === "Unknown") return -1;
+    return b.localeCompare(a);
+  });
+
+  recentList.innerHTML = years.map((year, i) => {
+    const evs = byYear.get(year);
+    const open = i === 0 ? " open" : "";
+    return `
+      <details class="year-accordion"${open}>
+        <summary class="year-accordion-head">
+          <span class="year-label">${esc(year)}</span>
+          <span class="year-count">${evs.length} game${evs.length !== 1 ? "s" : ""}</span>
+          <span class="year-chevron" aria-hidden="true">▾</span>
+        </summary>
+        <ul class="event-list year-event-list">${evs.map(eventItemHTML).join("")}</ul>
+      </details>`;
+  }).join("");
 }
 
-document.getElementById("log-form")?.addEventListener("submit", (e) => {
+document.getElementById("log-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!currentUser) return;
+
+  // Warn if scorer fields have unsaved input
+  const pendingScorer = scorerNameInput?.value.trim() || scorerMinInput?.value.trim();
+  if (pendingScorer) {
+    const go = confirm("You have a goal scorer typed but not added — log the event without adding them?");
+    if (!go) { scorerNameInput?.focus(); return; }
+  }
   const dateUnknown = logDateUnknown?.checked || false;
   const dateRaw     = logDate?.value || "";
   const date        = dateUnknown ? null : (isValidDate(dateRaw) ? dateRaw : null);
@@ -632,16 +1049,45 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
     return;
   }
 
+  const evId = newId();
   const ev = {
-    id: newId(), date, sport, homeTeam, awayTeam,
+    id: evId, date, sport, homeTeam, awayTeam,
     homeScore: isNaN(homeScore) ? 0 : homeScore,
     awayScore: isNaN(awayScore) ? 0 : awayScore,
     stadium, address, side, scorers, competition, penalties,
     homeLineup: [...stagedHomeLineup],
     awayLineup: [...stagedAwayLineup],
-    notes,
+    notes, photos: [],
     lat: null, lng: null, createdAt: new Date().toISOString(),
   };
+
+  // Upload photos to Firebase Storage
+  if (storage && stagedPhotoFiles.length > 0) {
+    const statusEl = document.getElementById("photo-upload-status");
+    if (logSubmitBtn) { logSubmitBtn.disabled = true; logSubmitBtn.textContent = "Uploading photos…"; }
+    if (statusEl) { statusEl.textContent = `Uploading ${stagedPhotoFiles.length} photo(s)…`; statusEl.hidden = false; }
+    const uploadFolder = editingEventId || evId;
+    const uploadedUrls = [];
+    for (const file of stagedPhotoFiles) {
+      try {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
+        const path = `photos/${currentUser.uid}/${uploadFolder}/${Date.now()}_${safeName}`;
+        const snap = await uploadBytes(storageRef(storage, path), file);
+        uploadedUrls.push(await getDownloadURL(snap.ref));
+      } catch (err) {
+        console.error("Photo upload failed:", err);
+        if (err?.code === "storage/unauthorized") {
+          alert("Photo upload failed: make sure Firebase Storage rules allow authenticated writes.\n\nThe event will be saved without these photos.");
+          break;
+        }
+      }
+    }
+    ev.photos = [...stagedPhotoUrls, ...uploadedUrls];
+    if (logSubmitBtn) { logSubmitBtn.disabled = false; logSubmitBtn.textContent = editingEventId ? "Save Changes" : "Log Event"; }
+    if (statusEl) statusEl.hidden = true;
+  } else {
+    ev.photos = [...stagedPhotoUrls];
+  }
 
   // Save team locations if provided
   const locs = loadTeamLocs();
@@ -713,11 +1159,17 @@ document.getElementById("log-form")?.addEventListener("submit", (e) => {
   stagedScorers    = [];
   stagedHomeLineup = [];
   stagedAwayLineup = [];
+  stagedPhotoUrls  = [];
+  stagedPhotoFiles.forEach((f) => { const u = photoObjectURLs.get(f); if (u) URL.revokeObjectURL(u); });
+  stagedPhotoFiles = [];
+  photoObjectURLs.clear();
   renderStagedScorers();
   renderStagedLineup("home");
   renderStagedLineup("away");
+  renderStagedPhotos();
 
   renderRecentEvents();
+  if (activeTab === "photos") renderPhotosTab();
   geocodePending();
 });
 
@@ -740,6 +1192,7 @@ document.addEventListener("click", (e) => {
   if (activeTab === "stadiums") renderStadiumsTab();
   if (activeTab === "scorers")  renderScorersTab();
   if (activeTab === "teams")    renderTeamsTab();
+  if (activeTab === "photos")   renderPhotosTab();
 });
 
 // ── My Stadiums tab ───────────────────────────────────
@@ -750,8 +1203,9 @@ const fullEmpty    = document.getElementById("full-empty");
 const mapEmpty     = document.getElementById("map-empty");
 const mapContainer = document.getElementById("events-map");
 
-let stadiumMapInstance = null;
-let stadiumMapReady    = false;
+let stadiumMapInstance  = null;
+let stadiumMapReady     = false;
+let stadiumLayerGroup   = null;
 
 filterSport?.addEventListener("change", renderStadiumsTab);
 filterYear?.addEventListener("change",  renderStadiumsTab);
@@ -785,15 +1239,19 @@ function renderStadiumsTab() {
 
 function renderStadiumMap(events) {
   const withCoords = events.filter((e) => typeof e.lat === "number" && typeof e.lng === "number");
-  const byStadium = new Map();
-  withCoords.forEach((e) => {
-    const key = `${e.stadium}|||${e.address || e.city || ""}`;
-    if (!byStadium.has(key)) byStadium.set(key, { stadium: e.stadium, address: e.address || e.city || "", lat: e.lat, lng: e.lng, events: [] });
-    byStadium.get(key).events.push(e);
-  });
-  const stadiums = [...byStadium.values()];
 
-  if (!stadiums.length) {
+  // Group by rounded coordinates so same-location venues share one marker
+  const byCoord = new Map();
+  withCoords.forEach((e) => {
+    const key = `${e.lat.toFixed(4)},${e.lng.toFixed(4)}`;
+    if (!byCoord.has(key)) byCoord.set(key, { lat: e.lat, lng: e.lng, venues: new Map() });
+    const loc = byCoord.get(key);
+    const vKey = `${e.stadium}|||${e.address || ""}`;
+    if (!loc.venues.has(vKey)) loc.venues.set(vKey, { stadium: e.stadium, address: e.address || "", events: [] });
+    loc.venues.get(vKey).events.push(e);
+  });
+
+  if (!byCoord.size) {
     if (mapContainer) mapContainer.style.display = "none";
     if (mapEmpty) mapEmpty.hidden = false;
     return;
@@ -808,18 +1266,21 @@ function renderStadiumMap(events) {
       attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
       maxZoom: 19,
     }).addTo(stadiumMapInstance);
+    stadiumLayerGroup = window.L.layerGroup().addTo(stadiumMapInstance);
     stadiumMapReady = true;
   } else {
-    stadiumMapInstance.eachLayer((l) => { if (l instanceof window.L.Marker) stadiumMapInstance.removeLayer(l); });
+    stadiumLayerGroup.clearLayers();
   }
 
   const bounds = [];
-  stadiums.forEach(({ stadium, address, lat, lng, events: evts }) => {
-    const lines = [...evts].sort((a, b) => (b.date || "").localeCompare(a.date || ""))
-      .map((e) => `<b>${esc(e.homeTeam)} ${scoreDisplay(e)} ${esc(e.awayTeam)}</b><br>${sportLabel(e.sport)} · ${e.date ? formatDate(e.date) : "Date unknown"}`)
-      .join("<hr style='margin:5px 0'>");
-    window.L.marker([lat, lng]).addTo(stadiumMapInstance)
-      .bindPopup(`<b>${esc(stadium)}</b>${address ? `<br><em>${esc(address)}</em>` : ""}<hr style='margin:5px 0'>${lines}`);
+  byCoord.forEach(({ lat, lng, venues }) => {
+    const venueBlocks = [...venues.values()].map(({ stadium, address, events: evts }) => {
+      const lines = [...evts].sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+        .map((e) => `<b>${esc(e.homeTeam)} ${scoreDisplay(e)} ${esc(e.awayTeam)}</b><br>${sportLabel(e.sport)} · ${e.date ? formatDate(e.date) : "Date unknown"}`)
+        .join("<hr style='margin:4px 0'>");
+      return `<b>${esc(stadium)}</b>${address ? `<br><em>${esc(address)}</em>` : ""}<hr style='margin:5px 0'>${lines}`;
+    }).join("<hr style='margin:6px 0;border-color:#c8ecea'>");
+    window.L.marker([lat, lng]).addTo(stadiumLayerGroup).bindPopup(venueBlocks, { maxHeight: 220 });
     bounds.push([lat, lng]);
   });
 
@@ -834,6 +1295,7 @@ const scorersAllEmpty = document.getElementById("scorers-all-empty");
 
 function renderScorersTab() {
   const events = loadEvents();
+  const info   = loadScorerInfo();
 
   // Aggregate all scorers across all soccer events
   const byScorer = new Map();
@@ -842,7 +1304,7 @@ function renderScorersTab() {
     e.scorers.forEach((s) => {
       const key = s.name.toLowerCase().trim();
       if (!byScorer.has(key)) {
-        byScorer.set(key, { name: s.name, goals: 0, games: [] });
+        byScorer.set(key, { key, name: s.name, goals: 0, games: [] });
       }
       const entry = byScorer.get(key);
       entry.goals++;
@@ -859,13 +1321,38 @@ function renderScorersTab() {
 
   const scorers = [...byScorer.values()].sort((a, b) => b.goals - a.goals || a.name.localeCompare(b.name));
 
+  const exportBtn = document.getElementById("export-scorers-btn");
   if (!scorers.length) {
     scorersAllList.innerHTML = "";
     scorersAllEmpty.hidden = false;
+    if (exportBtn) exportBtn.hidden = true;
     return;
   }
   scorersAllEmpty.hidden = true;
+  if (exportBtn) exportBtn.hidden = false;
   scorersAllList.innerHTML = scorers.map((s) => {
+    const bp  = info[s.key] || null;
+    const bpText = bp ? [bp.city, normalizeState(bp.state), bp.country].filter(Boolean).join(", ") : "";
+    const birthplaceHtml = bpText
+      ? `<div class="scorer-birthplace">
+           <span class="scorer-bp-display">🌍 ${esc(bpText)}</span>
+           <button class="btn btn-sm" type="button" data-action="edit-scorer-bp" data-scorer-key="${esc(s.key)}">Edit</button>
+         </div>`
+      : `<div class="scorer-birthplace">
+           <button class="btn btn-sm" type="button" data-action="edit-scorer-bp" data-scorer-key="${esc(s.key)}">+ Add birthplace</button>
+         </div>`;
+    const formHtml = `
+      <form class="scorer-bp-form team-loc-form" data-scorer-key="${esc(s.key)}" hidden>
+        <div class="team-loc-inputs">
+          <input class="scorer-bp-city" type="text" placeholder="City" maxlength="80" value="${esc(bp?.city || "")}" />
+          <input class="scorer-bp-state" type="text" placeholder="State (optional)" maxlength="80" value="${esc(bp?.state || "")}" />
+          <input class="scorer-bp-country" type="text" placeholder="Country" maxlength="80" value="${esc(bp?.country || "")}" />
+        </div>
+        <div class="team-loc-actions">
+          <button type="submit" class="btn btn-sm btn-primary">Save</button>
+          <button type="button" class="btn btn-sm" data-action="cancel-scorer-bp">Cancel</button>
+        </div>
+      </form>`;
     const gameLines = [...s.games]
       .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
       .map((g) => {
@@ -873,24 +1360,330 @@ function renderScorersTab() {
         return `<li class="scorer-game-line">${esc(g.match)} · <em>${esc(g.team)}${min}</em> · ${formatDate(g.date)}</li>`;
       }).join("");
     return `
-      <li class="scorer-entry">
+      <li class="scorer-entry" data-scorer-key="${esc(s.key)}">
         <div class="scorer-entry-head">
           <span class="scorer-entry-name">${esc(s.name)}</span>
           <span class="scorer-entry-count">${s.goals} ${s.goals === 1 ? "goal" : "goals"}</span>
         </div>
+        ${birthplaceHtml}${formHtml}
         <ul class="scorer-game-list">${gameLines}</ul>
       </li>`;
   }).join("");
 }
 
+function exportScorersCSV() {
+  const events = loadEvents();
+  const byScorer = new Map();
+  events.forEach((e) => {
+    if (e.sport !== "soccer" || !e.scorers.length) return;
+    e.scorers.forEach((s) => {
+      const key = s.name.toLowerCase().trim();
+      if (!byScorer.has(key)) byScorer.set(key, { name: s.name, goals: 0, games: [] });
+      const entry = byScorer.get(key);
+      entry.goals++;
+      entry.games.push({
+        date: e.date,
+        match: `${e.homeTeam} ${e.homeScore ?? "?"}–${e.awayScore ?? "?"} ${e.awayTeam}`,
+        team: s.team === "home" ? e.homeTeam : e.awayTeam,
+        minute: s.minute || "",
+        stadium: e.stadium || "",
+      });
+    });
+  });
+
+  const scorers = [...byScorer.values()].sort((a, b) => b.goals - a.goals || a.name.localeCompare(b.name));
+
+  const csvCell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const rows = [["Player", "Total Goals", "Match", "Team Scored For", "Minute", "Date", "Stadium"]];
+  scorers.forEach((s) => {
+    [...s.games].sort((a, b) => (b.date || "").localeCompare(a.date || "")).forEach((g) => {
+      rows.push([s.name, s.goals, g.match, g.team, g.minute, g.date ? formatDate(g.date) : "", g.stadium]);
+    });
+  });
+
+  const csv = rows.map((r) => r.map(csvCell).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = "scorers.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById("export-scorers-btn")?.addEventListener("click", exportScorersCSV);
+
+// ── Scorers view toggle + map ─────────────────────────
+const scorersListSection = document.getElementById("scorers-list-section");
+const scorersMapSection  = document.getElementById("scorers-map-section");
+const scorersMapEl       = document.getElementById("scorers-map");
+const scorersMapEmpty    = document.getElementById("scorers-map-empty");
+
+let scorersView       = "list";
+let scorersMapInstance = null;
+let scorersMapReady    = false;
+let scorersLayerGroup  = null;
+let scorersStatMode    = "countries"; // "countries" | "states"
+
+document.querySelectorAll("[data-sview]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    scorersView = btn.dataset.sview;
+    document.querySelectorAll("[data-sview]").forEach((b) => b.classList.toggle("active", b.dataset.sview === scorersView));
+    scorersListSection.hidden = scorersView !== "list";
+    scorersMapSection.hidden  = scorersView !== "map";
+    if (scorersView === "map") renderScorersMap();
+  });
+});
+
+// Birthplace form event delegation
+scorersAllList?.addEventListener("click", (e) => {
+  const editBtn   = e.target.closest("[data-action='edit-scorer-bp']");
+  const cancelBtn = e.target.closest("[data-action='cancel-scorer-bp']");
+  if (editBtn) {
+    const key  = editBtn.dataset.scorerKey;
+    const form = scorersAllList.querySelector(`.scorer-bp-form[data-scorer-key="${key}"]`);
+    if (form) form.hidden = false;
+  }
+  if (cancelBtn) {
+    const form = cancelBtn.closest(".scorer-bp-form");
+    if (form) form.hidden = true;
+  }
+});
+
+scorersAllList?.addEventListener("submit", async (e) => {
+  const form = e.target.closest(".scorer-bp-form");
+  if (!form) return;
+  e.preventDefault();
+  const key     = form.dataset.scorerKey;
+  const city    = form.querySelector(".scorer-bp-city")?.value.trim() || "";
+  const state   = normalizeState(form.querySelector(".scorer-bp-state")?.value.trim() || "");
+  const country = form.querySelector(".scorer-bp-country")?.value.trim() || "";
+  if (!city && !country) { form.hidden = true; return; }
+
+  const info = loadScorerInfo();
+  info[key] = { city, state, country, lat: null, lng: null };
+
+  const coords = await geocodeTeamLocation(city, state, country);
+  if (coords) { info[key].lat = coords.lat; info[key].lng = coords.lng; }
+  saveScorerInfo(info);
+  renderScorersTab();
+});
+
+const US_COUNTRY_NAMES = new Set([
+  "us", "usa", "united states", "united states of america", "u.s.", "u.s.a.", "america",
+]);
+const TOTAL_US_STATES = 50;
+const TOTAL_COUNTRIES = 195;
+
+const US_STATE_ABBREVS = {
+  AL:"Alabama", AK:"Alaska", AZ:"Arizona", AR:"Arkansas", CA:"California",
+  CO:"Colorado", CT:"Connecticut", DE:"Delaware", FL:"Florida", GA:"Georgia",
+  HI:"Hawaii", ID:"Idaho", IL:"Illinois", IN:"Indiana", IA:"Iowa",
+  KS:"Kansas", KY:"Kentucky", LA:"Louisiana", ME:"Maine", MD:"Maryland",
+  MA:"Massachusetts", MI:"Michigan", MN:"Minnesota", MS:"Mississippi", MO:"Missouri",
+  MT:"Montana", NE:"Nebraska", NV:"Nevada", NH:"New Hampshire", NJ:"New Jersey",
+  NM:"New Mexico", NY:"New York", NC:"North Carolina", ND:"North Dakota", OH:"Ohio",
+  OK:"Oklahoma", OR:"Oregon", PA:"Pennsylvania", RI:"Rhode Island", SC:"South Carolina",
+  SD:"South Dakota", TN:"Tennessee", TX:"Texas", UT:"Utah", VT:"Vermont",
+  VA:"Virginia", WA:"Washington", WV:"West Virginia", WI:"Wisconsin", WY:"Wyoming",
+};
+const US_STATE_BY_NAME = Object.fromEntries(
+  Object.entries(US_STATE_ABBREVS).map(([, name]) => [name.toLowerCase(), name])
+);
+
+function normalizeState(str) {
+  if (!str) return str;
+  const t = str.trim();
+  const full = US_STATE_ABBREVS[t.toUpperCase()];
+  if (full) return full;
+  const byName = US_STATE_BY_NAME[t.toLowerCase()];
+  if (byName) return byName;
+  return t;
+}
+
+function isUSScorer(s) {
+  return US_COUNTRY_NAMES.has((s.bp.country || "").trim().toLowerCase());
+}
+
+function renderScorersStats(scorers, el) {
+  const isCountryMode = scorersStatMode === "countries";
+  const toggleHtml = `
+    <div class="scorers-stat-toggle">
+      <button class="stat-mode-btn${isCountryMode ? " active" : ""}" type="button" data-statmode="countries">Countries</button>
+      <button class="stat-mode-btn${!isCountryMode ? " active" : ""}" type="button" data-statmode="states">US States</button>
+    </div>`;
+
+  let summaryHtml, chipsHtml;
+
+  if (isCountryMode) {
+    const byCountry = new Map();
+    scorers.forEach((s) => {
+      const c = s.bp.country?.trim() || "Unknown";
+      byCountry.set(c, (byCountry.get(c) || 0) + 1);
+    });
+    const sorted = [...byCountry.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    const total = byCountry.size;
+    const pct   = ((total / TOTAL_COUNTRIES) * 100).toFixed(1);
+    summaryHtml = `<strong>${total}</strong> / ${TOTAL_COUNTRIES} countries <span class="scorers-pct">(${pct}%)</span>`;
+    chipsHtml   = sorted.map(([c, n]) => `<span class="scorers-country-chip">${esc(c)} <strong>${n}</strong></span>`).join("");
+  } else {
+    const usScorers = scorers.filter(isUSScorer);
+    const byState = new Map();
+    usScorers.forEach((s) => {
+      const st = normalizeState(s.bp.state?.trim() || "") || "Unknown";
+      byState.set(st, (byState.get(st) || 0) + 1);
+    });
+    const sorted = [...byState.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    const total = byState.size;
+    const pct   = ((total / TOTAL_US_STATES) * 100).toFixed(1);
+    summaryHtml = `<strong>${total}</strong> / ${TOTAL_US_STATES} US states <span class="scorers-pct">(${pct}%)</span>`;
+    chipsHtml   = sorted.map(([st, n]) => `<span class="scorers-country-chip">${esc(st)} <strong>${n}</strong></span>`).join("")
+      || `<span class="scorers-pct">No US birthplaces recorded yet.</span>`;
+  }
+
+  el.hidden = false;
+  el.innerHTML = `
+    <div class="scorers-stats-top">
+      <div class="scorers-map-summary">
+        <span class="scorers-stat"><strong>${scorers.length}</strong> scorer${scorers.length !== 1 ? "s" : ""}</span>
+        <span class="scorers-stat-sep">·</span>
+        <span class="scorers-stat">${summaryHtml}</span>
+      </div>
+      ${toggleHtml}
+    </div>
+    <div class="scorers-country-list">${chipsHtml}</div>`;
+}
+
+// Stat mode toggle delegation
+document.getElementById("scorers-map-section")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-statmode]");
+  if (!btn) return;
+  scorersStatMode = btn.dataset.statmode;
+  const statsEl = document.getElementById("scorers-map-stats");
+  const info    = loadScorerInfo();
+  const events  = loadEvents();
+  const byScorer = new Map();
+  events.forEach((ev) => {
+    if (ev.sport !== "soccer" || !ev.scorers.length) return;
+    ev.scorers.forEach((s) => {
+      const key = s.name.toLowerCase().trim();
+      if (!byScorer.has(key)) byScorer.set(key, { key, name: s.name, goals: 0 });
+      byScorer.get(key).goals++;
+    });
+  });
+  const scorers = [...byScorer.values()]
+    .map((s) => ({ ...s, bp: info[s.key] || null }))
+    .filter((s) => s.bp?.lat != null);
+  if (statsEl) renderScorersStats(scorers, statsEl);
+});
+
+function renderScorersMap() {
+  const info    = loadScorerInfo();
+  const events  = loadEvents();
+
+  // Build scorer list with birthplace coords
+  const byScorer = new Map();
+  events.forEach((e) => {
+    if (e.sport !== "soccer" || !e.scorers.length) return;
+    e.scorers.forEach((s) => {
+      const key = s.name.toLowerCase().trim();
+      if (!byScorer.has(key)) byScorer.set(key, { key, name: s.name, goals: 0 });
+      byScorer.get(key).goals++;
+    });
+  });
+
+  const scorers = [...byScorer.values()]
+    .map((s) => ({ ...s, bp: info[s.key] || null }))
+    .filter((s) => s.bp?.lat != null);
+
+  const statsEl = document.getElementById("scorers-map-stats");
+
+  if (!scorers.length) {
+    if (scorersMapEl)    scorersMapEl.style.display = "none";
+    if (scorersMapEmpty) scorersMapEmpty.hidden      = false;
+    if (statsEl)         statsEl.hidden              = true;
+    return;
+  }
+  if (scorersMapEl)    scorersMapEl.style.display = "";
+  if (scorersMapEmpty) scorersMapEmpty.hidden      = true;
+  if (typeof window.L === "undefined") return;
+
+  if (statsEl) renderScorersStats(scorers, statsEl);
+
+  if (!scorersMapReady) {
+    scorersMapInstance = window.L.map("scorers-map").setView([20, 0], 2);
+    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(scorersMapInstance);
+    scorersLayerGroup = window.L.layerGroup().addTo(scorersMapInstance);
+    scorersMapReady = true;
+  } else {
+    scorersLayerGroup.clearLayers();
+  }
+
+  // Group scorers sharing the same coordinates
+  const byLatLng = new Map();
+  scorers.forEach((s) => {
+    const coordKey = `${s.bp.lat.toFixed(5)},${s.bp.lng.toFixed(5)}`;
+    if (!byLatLng.has(coordKey)) byLatLng.set(coordKey, { lat: s.bp.lat, lng: s.bp.lng, scorers: [] });
+    byLatLng.get(coordKey).scorers.push(s);
+  });
+
+  const bounds = [];
+  byLatLng.forEach(({ lat, lng, scorers: locScorers }) => {
+    const first   = locScorers[0];
+    const bpText  = [first.bp.city, normalizeState(first.bp.state), first.bp.country].filter(Boolean).join(", ");
+    const lines   = locScorers.map((s) => `<b>${esc(s.name)}</b> — ${s.goals} ${s.goals === 1 ? "goal" : "goals"}`).join("<br>");
+    const popup   = `<em>${esc(bpText)}</em><hr style='margin:5px 0'>${lines}`;
+    const icon    = locScorers.length > 1 ? teamCountIcon(locScorers.length) : new window.L.Icon.Default();
+    window.L.marker([lat, lng], { icon }).addTo(scorersLayerGroup).bindPopup(popup);
+    bounds.push([lat, lng]);
+  });
+
+  if (bounds.length === 1) scorersMapInstance.setView(bounds[0], 6);
+  else scorersMapInstance.fitBounds(bounds, { padding: [40, 40] });
+  window.requestAnimationFrame(() => scorersMapInstance.invalidateSize());
+}
+
+// ── Scorer info storage (birthplace) ─────────────────
+function scorerInfoKey() { return currentUser ? `life-tracker-scorer-info-${currentUser.uid}` : null; }
+
+function loadScorerInfo() {
+  try {
+    const key = scorerInfoKey();
+    if (!key) return {};
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveScorerInfo(info) {
+  const key = scorerInfoKey();
+  if (key) localStorage.setItem(key, JSON.stringify(info));
+  const ref = userDocRef();
+  if (ref) setDoc(ref, { scorerInfo: info }, { merge: true }).catch(() => {});
+}
+
 // ── Team locations storage ────────────────────────────
-function loadTeamLocs() { return teamLocs; }
+function teamLocsKey() { return currentUser ? `life-tracker-team-locs-${currentUser.uid}` : null; }
+
+function loadTeamLocs() {
+  try {
+    const key = teamLocsKey();
+    if (!key) return {};
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
 
 function saveTeamLocs(locs) {
-  teamLocs = locs;
-  if (currentUser && db) {
-    setDoc(doc(db, "users", currentUser.uid, "data", "teamLocs"), { locs }).catch(() => {});
-  }
+  const key = teamLocsKey();
+  if (key) localStorage.setItem(key, JSON.stringify(locs));
+  const ref = userDocRef();
+  if (ref) setDoc(ref, { teamLocs: locs }, { merge: true }).catch(() => {});
 }
 
 async function geocodeTeamLocation(city, state, country) {
@@ -918,7 +1711,7 @@ const teamsMapEmpty    = document.getElementById("teams-map-empty");
 let teamsView        = "list";
 let teamsMapInstance  = null;
 let teamsMapReady     = false;
-let teamsClusterGroup = null;
+let teamsLayerGroup   = null;
 
 document.querySelectorAll(".view-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -959,7 +1752,7 @@ function renderTeamsTab() {
     teamsList.innerHTML = teams.map((t) => {
       const loc = t.loc;
       const locText = loc
-        ? [loc.city, loc.state, loc.country].filter(Boolean).join(", ")
+        ? [loc.city, normalizeState(loc.state), loc.country].filter(Boolean).join(", ")
         : "";
       const locHtml = locText
         ? `<div class="team-location">
@@ -1021,7 +1814,7 @@ teamsList?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const key     = form.dataset.teamKey;
   const city    = form.querySelector(".team-loc-city")?.value.trim() || "";
-  const state   = form.querySelector(".team-loc-state")?.value.trim() || "";
+  const state   = normalizeState(form.querySelector(".team-loc-state")?.value.trim() || "");
   const country = form.querySelector(".team-loc-country")?.value.trim() || "";
   if (!city && !country) { form.hidden = true; return; }
 
@@ -1033,6 +1826,23 @@ teamsList?.addEventListener("submit", async (e) => {
   saveTeamLocs(locs);
   renderTeamsTab();
 });
+
+function teamCountIcon(count) {
+  return window.L.divIcon({
+    className: "",
+    iconSize:    [25, 41],
+    iconAnchor:  [12, 41],
+    popupAnchor: [1, -34],
+    html: `<div style="position:relative;width:25px;height:41px">
+      <img src="https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png"
+           width="25" height="41" style="position:absolute;top:0;left:0" />
+      <div style="position:absolute;top:-8px;right:-10px;min-width:18px;height:18px;padding:0 4px;
+                  border-radius:999px;background:#e53935;color:#fff;font-size:11px;font-weight:700;
+                  display:flex;align-items:center;justify-content:center;
+                  border:2px solid #fff;font-family:sans-serif;line-height:1;box-sizing:border-box">${count}</div>
+    </div>`,
+  });
+}
 
 function renderTeamsMap() {
   const teams = aggregateTeams().filter((t) => t.loc?.lat != null);
@@ -1052,37 +1862,35 @@ function renderTeamsMap() {
       attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
       maxZoom: 19,
     }).addTo(teamsMapInstance);
+    teamsLayerGroup = window.L.layerGroup().addTo(teamsMapInstance);
     teamsMapReady = true;
-  } else if (teamsClusterGroup) {
-    teamsMapInstance.removeLayer(teamsClusterGroup);
+  } else {
+    teamsLayerGroup.clearLayers();
   }
 
-  teamsClusterGroup = window.L.markerClusterGroup ? window.L.markerClusterGroup({
-    maxClusterRadius: 20,
-    iconCreateFunction(cluster) {
-      const n = cluster.getChildCount();
-      return window.L.divIcon({
-        html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 38" width="26" height="38"><path d="M13 0C5.82 0 0 5.82 0 13c0 9.75 13 25 13 25S26 22.75 26 13C26 5.82 20.18 0 13 0z" fill="#2577b8" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/><text x="13" y="17" text-anchor="middle" fill="white" font-size="10" font-weight="bold" font-family="sans-serif">${n}</text></svg>`,
-        className: "cluster-pin-icon",
-        iconSize: [26, 38],
-        iconAnchor: [13, 38],
-      });
-    },
-  }) : null;
-  const teamsTarget = teamsClusterGroup || teamsMapInstance;
-
-  const bounds = [];
+  // Group teams that share the same coordinates into one marker
+  const byLatLng = new Map();
   teams.forEach((t) => {
-    const locText = [t.loc.city, t.loc.state, t.loc.country].filter(Boolean).join(", ");
-    const gameLines = [...t.games].sort((a, b) => (b.date || "").localeCompare(a.date || ""))
-      .map((g) => `${esc(g.match)} · ${g.date ? formatDate(g.date) : "Date unknown"}`)
-      .join("<br>");
-    const popup = `<b>${esc(t.name)}</b><br><em>${esc(locText)}</em><hr style='margin:5px 0'>${gameLines}`;
-    window.L.marker([t.loc.lat, t.loc.lng]).addTo(teamsTarget).bindPopup(popup);
-    bounds.push([t.loc.lat, t.loc.lng]);
+    const key = `${t.loc.lat.toFixed(5)},${t.loc.lng.toFixed(5)}`;
+    if (!byLatLng.has(key)) byLatLng.set(key, { lat: t.loc.lat, lng: t.loc.lng, teams: [] });
+    byLatLng.get(key).teams.push(t);
   });
 
-  if (teamsClusterGroup) teamsMapInstance.addLayer(teamsClusterGroup);
+  const bounds = [];
+  byLatLng.forEach(({ lat, lng, teams: locTeams }) => {
+    const locText = [locTeams[0].loc.city, normalizeState(locTeams[0].loc.state), locTeams[0].loc.country].filter(Boolean).join(", ");
+    const teamBlocks = locTeams.map((t) => {
+      const gameLines = [...t.games].sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+        .map((g) => `${esc(g.match)} · ${g.date ? formatDate(g.date) : "Date unknown"}`)
+        .join("<br>");
+      return `<b>${esc(t.name)}</b><hr style='margin:4px 0'>${gameLines}`;
+    }).join("<hr style='margin:6px 0;border-color:#c8ecea'>");
+    const popup = `<em>${esc(locText)}</em><hr style='margin:5px 0'>${teamBlocks}`;
+    const icon = locTeams.length > 1 ? teamCountIcon(locTeams.length) : new window.L.Icon.Default();
+    window.L.marker([lat, lng], { icon }).addTo(teamsLayerGroup).bindPopup(popup, { maxHeight: 220 });
+    bounds.push([lat, lng]);
+  });
+
   if (bounds.length === 1) teamsMapInstance.setView(bounds[0], 10);
   else teamsMapInstance.fitBounds(bounds, { padding: [40, 40] });
   window.requestAnimationFrame(() => teamsMapInstance.invalidateSize());
@@ -1102,14 +1910,20 @@ async function nominatimSearch(q) {
 }
 
 async function geocodeStadium(stadium, address) {
-  // Address alone geocodes much more reliably than "StadiumName StreetAddress"
+  // Try "Stadium, Address" together first — returns the actual venue, not just city center
+  if (stadium && address) {
+    const coords = await nominatimSearch(`${stadium}, ${address}`);
+    if (coords) return coords;
+    await new Promise((r) => setTimeout(r, 1200));
+  }
+  // Fall back to address alone
   if (address) {
     const coords = await nominatimSearch(address);
     if (coords) return coords;
-    // If address alone fails, wait before retrying with stadium name appended
-    await new Promise((r) => setTimeout(r, 1200));
+    if (stadium) await new Promise((r) => setTimeout(r, 1200));
   }
-  return nominatimSearch(stadium);
+  // Last resort: stadium name alone
+  return stadium ? nominatimSearch(stadium) : null;
 }
 
 async function geocodePending() {
@@ -1132,43 +1946,211 @@ async function geocodePending() {
 
 // ── App init ──────────────────────────────────────────
 async function initApp() {
-  if (currentUser && db) {
-    const uid = currentUser.uid;
+  updateSoccerFields();
 
-    // Load events
-    const evSnap = await getDoc(doc(db, "users", uid, "data", "events")).catch(() => null);
-    if (evSnap && evSnap.exists()) {
-      events = validateEvents(evSnap.data().list || []);
-    } else {
-      // One-time migration from localStorage
-      try {
-        const raw = localStorage.getItem(`life-tracker-events-${uid}`);
-        if (raw) {
-          events = validateEvents(JSON.parse(raw));
-          await setDoc(doc(db, "users", uid, "data", "events"), { list: events });
-          localStorage.removeItem(`life-tracker-events-${uid}`);
-        }
-      } catch { events = []; }
-    }
+  // Merge Firestore data with whatever is already on this device, then persist the union
+  const ref = userDocRef();
+  if (ref) {
+    try {
+      const snap = await getDoc(ref);
+      const evKey = storageKey();
+      const tlKey = teamLocsKey();
+      const siKey = scorerInfoKey();
 
-    // Load team locs
-    const locsSnap = await getDoc(doc(db, "users", uid, "data", "teamLocs")).catch(() => null);
-    if (locsSnap && locsSnap.exists()) {
-      teamLocs = locsSnap.data().locs || {};
-    } else {
-      // One-time migration from localStorage
-      try {
-        const raw = localStorage.getItem(`life-tracker-team-locs-${uid}`);
-        if (raw) {
-          teamLocs = JSON.parse(raw) || {};
-          await setDoc(doc(db, "users", uid, "data", "teamLocs"), { locs: teamLocs });
-          localStorage.removeItem(`life-tracker-team-locs-${uid}`);
+      const localEvents     = loadEvents();
+      const localTeamLocs   = loadTeamLocs();
+      const localScorerInfo = loadScorerInfo();
+
+      let mergedEvents     = localEvents;
+      let mergedTeamLocs   = localTeamLocs;
+      let mergedScorerInfo = localScorerInfo;
+
+      if (snap.exists()) {
+        const data = snap.data();
+
+        // Merge events: union by id, keep the copy with the later createdAt on conflict
+        if (Array.isArray(data.events)) {
+          const byId = new Map();
+          for (const e of data.events) {
+            if (e && typeof e.id === "string") byId.set(e.id, e);
+          }
+          for (const e of localEvents) {
+            const existing = byId.get(e.id);
+            if (!existing) {
+              byId.set(e.id, e);
+            } else {
+              const existingTs = existing.createdAt ? new Date(existing.createdAt).getTime() : 0;
+              const localTs    = e.createdAt        ? new Date(e.createdAt).getTime()        : 0;
+              if (localTs > existingTs) byId.set(e.id, e);
+            }
+          }
+          mergedEvents = Array.from(byId.values());
         }
-      } catch { teamLocs = {}; }
-    }
+
+        // Merge teamLocs: union of all keys; prefer whichever copy has coordinates
+        if (data.teamLocs && typeof data.teamLocs === "object") {
+          mergedTeamLocs = { ...data.teamLocs };
+          for (const [key, local] of Object.entries(localTeamLocs)) {
+            const remote = mergedTeamLocs[key];
+            if (!remote) {
+              mergedTeamLocs[key] = local;
+            } else {
+              const localHasCoords  = local.lat  != null && local.lng  != null;
+              const remoteHasCoords = remote.lat != null && remote.lng != null;
+              if (localHasCoords || !remoteHasCoords) mergedTeamLocs[key] = local;
+            }
+          }
+        }
+
+        // Merge scorerInfo: union of all keys; prefer whichever copy has coordinates
+        if (data.scorerInfo && typeof data.scorerInfo === "object") {
+          mergedScorerInfo = { ...data.scorerInfo };
+          for (const [key, local] of Object.entries(localScorerInfo)) {
+            const remote = mergedScorerInfo[key];
+            if (!remote) {
+              mergedScorerInfo[key] = local;
+            } else {
+              const localHasCoords  = local.lat  != null && local.lng  != null;
+              const remoteHasCoords = remote.lat != null && remote.lng != null;
+              if (localHasCoords || !remoteHasCoords) mergedScorerInfo[key] = local;
+            }
+          }
+        }
+      }
+
+      // Write merged result back to both localStorage and Firestore
+      if (evKey) localStorage.setItem(evKey, JSON.stringify(mergedEvents));
+      if (tlKey) localStorage.setItem(tlKey, JSON.stringify(mergedTeamLocs));
+      if (siKey) localStorage.setItem(siKey, JSON.stringify(mergedScorerInfo));
+      setDoc(ref, { events: mergedEvents, teamLocs: mergedTeamLocs, scorerInfo: mergedScorerInfo }, { merge: true }).catch(() => {});
+
+    } catch { /* fall through to whatever is in localStorage */ }
   }
 
-  updateSoccerFields();
   renderRecentEvents();
   geocodePending();
 }
+
+// ── Photos tab ────────────────────────────────────────
+let lightboxPhotos = [];
+let lightboxIndex  = 0;
+
+function renderPhotosTab() {
+  const content  = document.getElementById("photos-content");
+  const emptyMsg = document.getElementById("photos-empty");
+  const events   = loadEvents().filter((e) => e.photos && e.photos.length > 0);
+
+  if (!events.length) {
+    if (content)  content.innerHTML = "";
+    if (emptyMsg) emptyMsg.hidden   = false;
+    return;
+  }
+  if (emptyMsg) emptyMsg.hidden = true;
+
+  const byYear = new Map();
+  for (const e of events) {
+    const year = e.date ? e.date.slice(0, 4) : "Unknown";
+    if (!byYear.has(year)) byYear.set(year, []);
+    byYear.get(year).push(e);
+  }
+
+  const years = [...byYear.keys()].sort((a, b) => {
+    if (a === "Unknown") return 1;
+    if (b === "Unknown") return -1;
+    return b.localeCompare(a);
+  });
+
+  const allPhotos = [];
+
+  const html = years.map((year, yi) => {
+    const yearEvents = [...byYear.get(year)].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+    const byVenue = new Map();
+    for (const e of yearEvents) {
+      const venue = e.stadium || e.address || "Unknown Venue";
+      if (!byVenue.has(venue)) byVenue.set(venue, []);
+      byVenue.get(venue).push(e);
+    }
+
+    const venueHtml = [...byVenue.entries()].map(([venue, venueEvents]) => {
+      const gridItems = venueEvents.flatMap((e) =>
+        e.photos.map((url) => {
+          const idx = allPhotos.length;
+          const caption = `${e.homeTeam || "?"} ${scoreDisplay(e)} ${e.awayTeam || "?"}${e.date ? " · " + formatDate(e.date) : ""} · ${esc(venue)}`;
+          allPhotos.push({ url, caption });
+          return `<button class="photo-grid-item" type="button" data-photo-idx="${idx}" aria-label="View photo">
+            <img src="${esc(url)}" alt="${esc(caption)}" loading="lazy" />
+          </button>`;
+        })
+      ).join("");
+
+      return `<div class="photos-venue-group">
+        <p class="photos-venue-label">📍 ${esc(venue)}</p>
+        <div class="photos-grid">${gridItems}</div>
+      </div>`;
+    }).join("");
+
+    const total = yearEvents.reduce((s, e) => s + e.photos.length, 0);
+    const open  = yi === 0 ? " open" : "";
+    return `<details class="year-accordion"${open}>
+      <summary class="year-accordion-head">
+        <span class="year-label">${esc(year)}</span>
+        <span class="year-count">${total} photo${total !== 1 ? "s" : ""}</span>
+        <span class="year-chevron" aria-hidden="true">▾</span>
+      </summary>
+      <div class="photos-year-content">${venueHtml}</div>
+    </details>`;
+  }).join("");
+
+  if (content) content.innerHTML = html;
+  lightboxPhotos = allPhotos;
+}
+
+document.getElementById("photos-content")?.addEventListener("click", (e) => {
+  const btn = e.target.closest(".photo-grid-item");
+  if (!btn) return;
+  const idx = parseInt(btn.dataset.photoIdx, 10);
+  if (idx >= 0 && idx < lightboxPhotos.length) openLightbox(idx);
+});
+
+// ── Lightbox ──────────────────────────────────────────
+const lightboxEl      = document.getElementById("photo-lightbox");
+const lightboxImg     = document.getElementById("lightbox-img");
+const lightboxCaption = document.getElementById("lightbox-caption");
+const lightboxClose   = document.getElementById("lightbox-close");
+const lightboxPrev    = document.getElementById("lightbox-prev");
+const lightboxNext    = document.getElementById("lightbox-next");
+
+function openLightbox(index) {
+  showLightboxPhoto(index);
+  lightboxEl.hidden = false;
+  document.body.style.overflow = "hidden";
+  lightboxClose?.focus();
+}
+
+function closeLightbox() {
+  lightboxEl.hidden = true;
+  document.body.style.overflow = "";
+}
+
+function showLightboxPhoto(index) {
+  lightboxIndex = Math.max(0, Math.min(index, lightboxPhotos.length - 1));
+  const p = lightboxPhotos[lightboxIndex];
+  if (!p) return;
+  lightboxImg.src = p.url;
+  lightboxImg.alt = p.caption;
+  if (lightboxCaption) lightboxCaption.textContent = p.caption;
+  if (lightboxPrev) lightboxPrev.hidden = lightboxIndex === 0;
+  if (lightboxNext) lightboxNext.hidden = lightboxIndex === lightboxPhotos.length - 1;
+}
+
+lightboxClose?.addEventListener("click", closeLightbox);
+lightboxPrev?.addEventListener("click", () => showLightboxPhoto(lightboxIndex - 1));
+lightboxNext?.addEventListener("click", () => showLightboxPhoto(lightboxIndex + 1));
+lightboxEl?.addEventListener("click", (e) => { if (e.target === lightboxEl) closeLightbox(); });
+document.addEventListener("keydown", (e) => {
+  if (!lightboxEl || lightboxEl.hidden) return;
+  if (e.key === "Escape")      closeLightbox();
+  if (e.key === "ArrowLeft")   showLightboxPhoto(lightboxIndex - 1);
+  if (e.key === "ArrowRight")  showLightboxPhoto(lightboxIndex + 1);
+});
