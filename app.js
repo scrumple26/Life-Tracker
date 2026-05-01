@@ -2024,7 +2024,7 @@ async function initApp() {
       if (siKey) localStorage.setItem(siKey, JSON.stringify(mergedScorerInfo));
       setDoc(ref, { events: mergedEvents, teamLocs: mergedTeamLocs, scorerInfo: mergedScorerInfo }, { merge: true }).catch(() => {});
 
-    } catch { /* fall through to whatever is in localStorage */ }
+    } catch (err) { console.error("Firestore sync failed:", err); }
   }
 
   renderRecentEvents();
