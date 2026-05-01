@@ -1052,6 +1052,65 @@ input:disabled { opacity: 0.45; }
 .lightbox-prev:hover, .lightbox-next:hover { background: rgba(255,255,255,0.26); }
 .lightbox-prev[hidden], .lightbox-next[hidden] { display: none !important; }
 
+/* ── Match finder ────────────────────────────────────── */
+.match-finder-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.match-finder-status {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.match-results-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  max-height: 340px;
+  overflow-y: auto;
+}
+.match-result-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--line);
+  transition: background 0.1s;
+}
+.match-result-item:last-child { border-bottom: none; }
+.match-result-item:hover { background: var(--brand-soft); }
+.match-league {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.match-teams {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.match-score {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--brand);
+  background: var(--brand-soft);
+  padding: 1px 7px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+.match-venue {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
 /* ── Responsive ──────────────────────────────────────── */
 @media (max-width: 600px) {
   .page { padding: 16px 12px 48px; }

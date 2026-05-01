@@ -471,6 +471,7 @@ function cancelEdit() {
   renderStagedLineup("away");
   renderStagedPhotos();
   updateSoccerFields();
+  resetMatchFinder();
   const pasteInput  = document.getElementById("lineup-paste-input");
   const pasteStatus = document.getElementById("lineup-paste-status");
   const pasteSection = document.getElementById("lineup-paste-section");
@@ -2153,4 +2154,159 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape")      closeLightbox();
   if (e.key === "ArrowLeft")   showLightboxPhoto(lightboxIndex - 1);
   if (e.key === "ArrowRight")  showLightboxPhoto(lightboxIndex + 1);
+});
+
+// ── API-Football match finder ─────────────────────────
+const FOOTBALL_API_KEY  = () => window.LIFE_TRACKER_FOOTBALL_API_KEY || "";
+const FOOTBALL_API_BASE = "https://api-football-v1.p.rapidapi.com/v3";
+
+// Priority league IDs to sort to the top (EPL, La Liga, Bundesliga, Serie A, Ligue 1, UCL, UEL, MLS, World Cup, Euros)
+const PRIORITY_LEAGUES = new Set([39, 140, 78, 135, 61, 2, 3, 253, 1, 4, 45, 48, 848]);
+
+async function footballFetch(path) {
+  const key = FOOTBALL_API_KEY();
+  if (!key) throw new Error("No API key — add it to firebase-config.js");
+  const res = await fetch(`${FOOTBALL_API_BASE}${path}`, {
+    headers: {
+      "x-rapidapi-key": key,
+      "x-rapidapi-host": "api-football-v1.p.rapidapi.com",
+    },
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+  const data = await res.json();
+  return data.response ?? [];
+}
+
+function resetMatchFinder() {
+  const bar     = document.getElementById("match-finder");
+  const list    = document.getElementById("match-results-list");
+  const status  = document.getElementById("match-finder-status");
+  if (bar)    bar.hidden = document.getElementById("log-sport")?.value !== "soccer";
+  if (list)   { list.innerHTML = ""; list.hidden = true; }
+  if (status) status.textContent = "";
+}
+
+// Show/hide finder when sport changes
+document.getElementById("log-sport")?.addEventListener("change", resetMatchFinder);
+
+// Find Match button
+document.getElementById("find-match-btn")?.addEventListener("click", async () => {
+  const date   = document.getElementById("log-date")?.value;
+  const status = document.getElementById("match-finder-status");
+  const list   = document.getElementById("match-results-list");
+
+  if (!date)              { if (status) status.textContent = "Select a date first."; return; }
+  if (!FOOTBALL_API_KEY()) { if (status) status.textContent = "Add your API key to firebase-config.js first."; return; }
+
+  if (status) status.textContent = "Loading…";
+  if (list)   { list.innerHTML = ""; list.hidden = true; }
+
+  try {
+    const fixtures = await footballFetch(`/fixtures?date=${date}`);
+    if (!fixtures.length) { if (status) status.textContent = "No matches found for this date."; return; }
+
+    fixtures.sort((a, b) => {
+      const aFin = ["FT","AET","PEN"].includes(a.fixture.status.short) ? 0 : 1;
+      const bFin = ["FT","AET","PEN"].includes(b.fixture.status.short) ? 0 : 1;
+      if (aFin !== bFin) return aFin - bFin;
+      return (PRIORITY_LEAGUES.has(b.league.id) ? 1 : 0) - (PRIORITY_LEAGUES.has(a.league.id) ? 1 : 0);
+    });
+
+    if (status) status.textContent = `${fixtures.length} match${fixtures.length !== 1 ? "es" : ""} — click one to fill the form`;
+    if (list) {
+      list.hidden = false;
+      list.innerHTML = fixtures.map((f, i) => {
+        const fin = ["FT","AET","PEN"].includes(f.fixture.status.short);
+        const score = fin ? `${f.goals.home ?? "?"}–${f.goals.away ?? "?"}` : f.fixture.status.short;
+        const venue = [f.fixture.venue?.name, f.fixture.venue?.city].filter(Boolean).join(", ");
+        return `<li class="match-result-item" data-fixture-idx="${i}">
+          <span class="match-league">${esc(f.league.name)} · ${esc(f.league.country)}</span>
+          <span class="match-teams">
+            <span class="match-team">${esc(f.teams.home.name)}</span>
+            <span class="match-score">${score}</span>
+            <span class="match-team">${esc(f.teams.away.name)}</span>
+          </span>
+          ${venue ? `<span class="match-venue">${esc(venue)}</span>` : ""}
+        </li>`;
+      }).join("");
+
+      list.querySelectorAll(".match-result-item").forEach((li) => {
+        li.addEventListener("click", () => {
+          const f = fixtures[parseInt(li.dataset.fixtureIdx, 10)];
+          fillFromFixture(f);
+        });
+      });
+    }
+  } catch (err) {
+    if (status) status.textContent = `Error: ${err.message}`;
+  }
+});
+
+async function fillFromFixture(f) {
+  const status = document.getElementById("match-finder-status");
+  const list   = document.getElementById("match-results-list");
+  if (list)   list.hidden = true;
+  if (status) status.textContent = "Loading lineups & scorers…";
+
+  // ── Basic fields ──
+  const homeTeamEl   = document.getElementById("log-home-team");
+  const awayTeamEl   = document.getElementById("log-away-team");
+  const homeScoreEl  = document.getElementById("log-home-score");
+  const awayScoreEl  = document.getElementById("log-away-score");
+  const stadiumEl    = document.getElementById("log-stadium");
+  const addressEl    = document.getElementById("log-address");
+  const competitionEl = document.getElementById("log-competition");
+
+  if (homeTeamEl)    homeTeamEl.value    = f.teams.home.name;
+  if (awayTeamEl)    awayTeamEl.value    = f.teams.away.name;
+  if (homeScoreEl && f.goals.home != null) homeScoreEl.value = f.goals.home;
+  if (awayScoreEl && f.goals.away != null) awayScoreEl.value = f.goals.away;
+  if (stadiumEl && f.fixture.venue?.name)  stadiumEl.value   = f.fixture.venue.name;
+  if (addressEl && f.fixture.venue?.city)  addressEl.value   = f.fixture.venue.city;
+  if (competitionEl) competitionEl.value = f.league.name;
+
+  // ── Team locations ──
+  const homeCity    = document.getElementById("log-home-loc-city");
+  const homeCountry = document.getElementById("log-home-loc-country");
+  const awayCountry = document.getElementById("log-away-loc-country");
+  if (homeCity    && f.fixture.venue?.city)   homeCity.value    = f.fixture.venue.city;
+  if (homeCountry && f.teams.home.country)    homeCountry.value = f.teams.home.country;
+  if (awayCountry && f.teams.away.country)    awayCountry.value = f.teams.away.country;
+
+  // ── Lineups + events ──
+  try {
+    const [lineups, events] = await Promise.all([
+      footballFetch(`/fixtures/lineups?fixture=${f.fixture.id}`),
+      footballFetch(`/fixtures/events?fixture=${f.fixture.id}`),
+    ]);
+
+    // Lineups
+    stagedHomeLineup = [];
+    stagedAwayLineup = [];
+    for (const teamLineup of lineups) {
+      const isHome = teamLineup.team.id === f.teams.home.id;
+      const arr    = isHome ? stagedHomeLineup : stagedAwayLineup;
+      for (const p of teamLineup.startXI   ?? []) arr.push({ name: p.player.name, position: p.player.pos || "" });
+      for (const p of teamLineup.substitutes ?? []) arr.push({ name: p.player.name, position: `Sub${p.player.pos ? " · " + p.player.pos : ""}` });
+    }
+    renderStagedLineup("home");
+    renderStagedLineup("away");
+
+    // Scorers (goals only, excluding own goals from the scoring team's perspective)
+    stagedScorers = [];
+    for (const ev of events) {
+      if (ev.type !== "Goal") continue;
+      const isOwnGoal = ev.detail === "Own Goal";
+      const isHome    = ev.team.id === f.teams.home.id;
+      // Own goals credit the opposite side
+      const side = isOwnGoal ? (isHome ? "away" : "home") : (isHome ? "home" : "away");
+      stagedScorers.push({ name: ev.player.name, team: side, minute: String(ev.time.elapsed) });
+    }
+    renderStagedScorers();
+
+    if (status) status.textContent = `✓ Filled from API · ${stagedScorers.length} goal${stagedScorers.length !== 1 ? "s" : ""} · ${stagedHomeLineup.length + stagedAwayLineup.length} players`;
+  } catch {
+    if (status) status.textContent = "✓ Basic info filled (lineups/scorers unavailable)";
+  }
+}
 });

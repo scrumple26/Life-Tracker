@@ -1,3 +1,6 @@
+// Get a free key at https://rapidapi.com/api-sports/api/api-football
+window.LIFE_TRACKER_FOOTBALL_API_KEY = "";
+
 window.LIFE_TRACKER_FIREBASE_CONFIG = {
   apiKey: "AIzaSyD4f98h80C4QZbBKMef4Upz5-R6T6TyJIg",
   authDomain: "life-tracker-6f707.firebaseapp.com",
