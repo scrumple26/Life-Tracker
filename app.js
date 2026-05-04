@@ -20,6 +20,9 @@ import {
   getDownloadURL,
 } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-storage.js";
 
+// ── Diagnostic ────────────────────────────────────────
+{ const d = document.getElementById("js-diag"); if (d) d.textContent = "JS: module loaded, Firebase initializing…"; }
+
 // ── Firebase init ─────────────────────────────────────
 const config = window.LIFE_TRACKER_FIREBASE_CONFIG || {};
 const firebaseReady = !!(config.apiKey && config.authDomain && config.projectId);
@@ -32,9 +35,13 @@ if (firebaseReady) {
     auth    = getAuth(app);
     db      = getFirestore(app);
     storage = getStorage(app);
+    { const d = document.getElementById("js-diag"); if (d) d.textContent = `JS: Firebase OK, auth=${!!auth}`; }
   } catch (err) {
     console.error("Firebase init failed:", err);
+    { const d = document.getElementById("js-diag"); if (d) d.textContent = `JS: Firebase init ERROR — ${err.message}`; }
   }
+} else {
+  { const d = document.getElementById("js-diag"); if (d) d.textContent = "JS: Firebase config missing"; }
 }
 
 // ── State ─────────────────────────────────────────────
