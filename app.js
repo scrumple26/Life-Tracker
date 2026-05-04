@@ -2340,4 +2340,3 @@ async function fillFromFixture(f) {
     if (status) status.textContent = "✓ Basic info filled (lineups/scorers unavailable)";
   }
 }
-});
