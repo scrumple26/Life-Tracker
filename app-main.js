@@ -239,13 +239,13 @@ forgotBtn?.addEventListener("click", async () => {
   try {
     await auth.sendPasswordResetEmail(email);
     setAuthMsg(`Password reset email sent to ${email}.`);
-  } catch {
+  } catch (_) {
     setAuthMsg("Unable to send reset email.", true);
   }
 });
 
 signoutBtn?.addEventListener("click", async () => {
-  if (auth) { try { await auth.signOut(); } catch { /* ignore */ } }
+  if (auth) { try { await auth.signOut(); } catch (_) { /* ignore */ } }
 });
 
 // ── Tab switching ─────────────────────────────────────
@@ -308,7 +308,7 @@ function loadEvents() {
       lng:       typeof e.lng === "number" ? e.lng : null,
       createdAt: typeof e.createdAt === "string" ? e.createdAt : new Date().toISOString(),
     }));
-  } catch { return []; }
+  } catch (_) { return []; }
 }
 
 function saveEvents(events) {
@@ -1670,7 +1670,7 @@ function loadScorerInfo() {
     if (!key) return {};
     const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
+  } catch (_) { return {}; }
 }
 
 function saveScorerInfo(info) {
@@ -1689,7 +1689,7 @@ function loadTeamLocs() {
     if (!key) return {};
     const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
+  } catch (_) { return {}; }
 }
 
 function saveTeamLocs(locs) {
@@ -1710,7 +1710,7 @@ async function geocodeTeamLocation(city, state, country) {
     const data = await res.json();
     if (!Array.isArray(data) || !data.length) return null;
     return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-  } catch { return null; }
+  } catch (_) { return null; }
 }
 
 // ── Teams tab ─────────────────────────────────────────
@@ -1919,7 +1919,7 @@ async function nominatimSearch(q) {
     if (!res.ok) return null;
     const data = await res.json();
     return Array.isArray(data) && data.length ? { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) } : null;
-  } catch { return null; }
+  } catch (_) { return null; }
 }
 
 async function geocodeStadium(stadium, address) {
@@ -2317,7 +2317,7 @@ async function fillFromFixture(f) {
     renderStagedScorers();
 
     if (status) status.textContent = `✓ Filled from API · ${stagedScorers.length} goal${stagedScorers.length !== 1 ? "s" : ""} · ${stagedHomeLineup.length + stagedAwayLineup.length} players`;
-  } catch {
+  } catch (_) {
     if (status) status.textContent = "✓ Basic info filled (lineups/scorers unavailable)";
   }
 }
