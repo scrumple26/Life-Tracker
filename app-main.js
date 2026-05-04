@@ -1,24 +1,4 @@
-import { initializeApp } from "/vendor/firebase-app.js";
-import {
-  getAuth,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
-  signOut,
-} from "/vendor/firebase-auth.js";
-import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc,
-} from "/vendor/firebase-firestore.js";
-import {
-  getStorage,
-  ref as storageRef,
-  uploadBytes,
-  getDownloadURL,
-} from "/vendor/firebase-storage.js";
+// Firebase loaded via compat <script> tags — no imports needed
 
 // ── Diagnostic ────────────────────────────────────────
 document.title = "Life Tracker [JS loaded]";
@@ -32,10 +12,10 @@ let db      = null;
 let storage = null;
 if (firebaseReady) {
   try {
-    const app = initializeApp(config);
-    auth    = getAuth(app);
-    db      = getFirestore(app);
-    storage = getStorage(app);
+    firebase.initializeApp(config);
+    auth    = firebase.auth();
+    db      = firebase.firestore();
+    storage = firebase.storage();
     { const d = document.getElementById("js-diag"); if (d) d.textContent = `JS: Firebase OK, auth=${!!auth}`; }
   } catch (err) {
     console.error("Firebase init failed:", err);
@@ -93,7 +73,7 @@ function formatDate(dateStr) {
 function isValidDate(str) { return /^\d{4}-\d{2}-\d{2}$/.test(str); }
 function isValidEmail(str) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(str).trim().toLowerCase()); }
 function storageKey() { return currentUser ? `life-tracker-events-${currentUser.uid}` : null; }
-function userDocRef() { return currentUser && db ? doc(db, "lifeTrackerData", currentUser.uid) : null; }
+function userDocRef() { return currentUser && db ? db.collection("lifeTrackerData").doc(currentUser.uid) : null; }
 
 // ── League presets ────────────────────────────────────
 const LEAGUE_PRESETS = {
@@ -139,7 +119,7 @@ function setAuthMsg(text, isError = false) {
 
 // ── Auth state ────────────────────────────────────────
 if (auth) {
-  onAuthStateChanged(auth, (user) => {
+  auth.onAuthStateChanged((user) => {
     currentUser = user;
     if (user) {
       authPanel.hidden = true;
@@ -199,7 +179,7 @@ signinForm?.addEventListener("submit", async (e) => {
   if (btn) { btn.disabled = true; btn.textContent = "Signing in…"; }
   setAuthMsg("");
   try {
-    await signInWithEmailAndPassword(auth, email, password);
+    await auth.signInWithEmailAndPassword(email, password);
     signinForm.reset();
   } catch (err) {
     console.error("Sign-in error:", err);
@@ -236,7 +216,7 @@ registerForm?.addEventListener("submit", async (e) => {
   if (btn) { btn.disabled = true; btn.textContent = "Creating account…"; }
   setAuthMsg("");
   try {
-    await createUserWithEmailAndPassword(auth, email, password);
+    await auth.createUserWithEmailAndPassword(email, password);
     registerForm.reset();
   } catch (err) {
     console.error("Register error:", err);
@@ -257,7 +237,7 @@ forgotBtn?.addEventListener("click", async () => {
   const email = signinEmail?.value.trim().toLowerCase() || "";
   if (!isValidEmail(email)) { setAuthMsg("Enter your email above, then click Forgot password.", true); return; }
   try {
-    await sendPasswordResetEmail(auth, email);
+    await auth.sendPasswordResetEmail(email);
     setAuthMsg(`Password reset email sent to ${email}.`);
   } catch {
     setAuthMsg("Unable to send reset email.", true);
@@ -265,7 +245,7 @@ forgotBtn?.addEventListener("click", async () => {
 });
 
 signoutBtn?.addEventListener("click", async () => {
-  if (auth) { try { await signOut(auth); } catch { /* ignore */ } }
+  if (auth) { try { await auth.signOut(); } catch { /* ignore */ } }
 });
 
 // ── Tab switching ─────────────────────────────────────
@@ -336,7 +316,7 @@ function saveEvents(events) {
   if (!key) return;
   localStorage.setItem(key, JSON.stringify(events));
   const ref = userDocRef();
-  if (ref) setDoc(ref, { events }, { merge: true }).catch(() => {});
+  if (ref) ref.set({ events }, { merge: true }).catch(() => {});
 }
 
 function newId() {
@@ -1105,8 +1085,8 @@ document.getElementById("log-form")?.addEventListener("submit", async (e) => {
       try {
         const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
         const path = `photos/${currentUser.uid}/${uploadFolder}/${Date.now()}_${safeName}`;
-        const snap = await uploadBytes(storageRef(storage, path), file);
-        uploadedUrls.push(await getDownloadURL(snap.ref));
+        const snap = await storage.ref(path).put(file);
+        uploadedUrls.push(await snap.ref.getDownloadURL());
       } catch (err) {
         console.error("Photo upload failed:", err);
         if (err?.code === "storage/unauthorized") {
@@ -1697,7 +1677,7 @@ function saveScorerInfo(info) {
   const key = scorerInfoKey();
   if (key) localStorage.setItem(key, JSON.stringify(info));
   const ref = userDocRef();
-  if (ref) setDoc(ref, { scorerInfo: info }, { merge: true }).catch(() => {});
+  if (ref) ref.set({ scorerInfo: info }, { merge: true }).catch(() => {});
 }
 
 // ── Team locations storage ────────────────────────────
@@ -1716,7 +1696,7 @@ function saveTeamLocs(locs) {
   const key = teamLocsKey();
   if (key) localStorage.setItem(key, JSON.stringify(locs));
   const ref = userDocRef();
-  if (ref) setDoc(ref, { teamLocs: locs }, { merge: true }).catch(() => {});
+  if (ref) ref.set({ teamLocs: locs }, { merge: true }).catch(() => {});
 }
 
 async function geocodeTeamLocation(city, state, country) {
@@ -1985,7 +1965,7 @@ async function initApp() {
   const ref = userDocRef();
   if (ref) {
     try {
-      const snap = await getDoc(ref);
+      const snap = await ref.get();
       const evKey = storageKey();
       const tlKey = teamLocsKey();
       const siKey = scorerInfoKey();
@@ -1998,7 +1978,7 @@ async function initApp() {
       let mergedTeamLocs   = localTeamLocs;
       let mergedScorerInfo = localScorerInfo;
 
-      if (snap.exists()) {
+      if (snap.exists) {
         const data = snap.data();
 
         // Merge events: union by id, keep the copy with the later createdAt on conflict
@@ -2055,7 +2035,7 @@ async function initApp() {
       if (evKey) localStorage.setItem(evKey, JSON.stringify(mergedEvents));
       if (tlKey) localStorage.setItem(tlKey, JSON.stringify(mergedTeamLocs));
       if (siKey) localStorage.setItem(siKey, JSON.stringify(mergedScorerInfo));
-      setDoc(ref, { events: mergedEvents, teamLocs: mergedTeamLocs, scorerInfo: mergedScorerInfo }, { merge: true }).catch(() => {});
+      ref.set({ events: mergedEvents, teamLocs: mergedTeamLocs, scorerInfo: mergedScorerInfo }, { merge: true }).catch(() => {});
 
     } catch (err) { console.error("Firestore sync failed:", err); }
   }
