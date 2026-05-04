@@ -1220,6 +1220,102 @@ let stadiumMapInstance  = null;
 let stadiumMapReady     = false;
 let stadiumLayerGroup   = null;
 
+// ── Geo highlight state ───────────────────────────────
+let _geoCountries = null;
+let _geoStates    = null;
+let scorersCountryHighlightOn = false;
+let scorersStateHighlightOn   = false;
+let teamsCountryHighlightOn   = false;
+let teamsStateHighlightOn     = false;
+let scorersCountryLayer = null;
+let scorersStateLayer   = null;
+let teamsCountryLayer   = null;
+let teamsStateLayer     = null;
+
+// Normalize user-entered country names to the exact name used in countries.geojson
+const COUNTRY_NORM = {
+  "united states": "usa", "united states of america": "usa", "us": "usa",
+  "u.s.": "usa", "u.s.a.": "usa", "america": "usa",
+  "uk": "england", "united kingdom": "england", "great britain": "england",
+  "britain": "england", "scotland": "england", "wales": "england", "northern ireland": "england",
+  "russian federation": "russia",
+  "republic of korea": "south korea", "korea, south": "south korea",
+  "korea, north": "north korea", "dprk": "north korea",
+  "czechia": "czech republic",
+  "côte d'ivoire": "ivory coast", "cote d'ivoire": "ivory coast", "cote divoire": "ivory coast",
+  "dr congo": "democratic republic of the congo",
+  "republic of ireland": "ireland", "eire": "ireland",
+  "uae": "united arab emirates",
+  "tanzania": "united republic of tanzania",
+  "viet nam": "vietnam",
+};
+function normalizeCountryName(name) {
+  const lower = (name || "").toLowerCase().trim();
+  return COUNTRY_NORM[lower] || lower;
+}
+
+async function getCountriesGeo() {
+  if (!_geoCountries) _geoCountries = await fetch("/geo/countries.geojson").then((r) => r.json());
+  return _geoCountries;
+}
+async function getStatesGeo() {
+  if (!_geoStates) _geoStates = await fetch("/geo/us-states.geojson").then((r) => r.json());
+  return _geoStates;
+}
+
+function makeGeoHighlight(geojson, matchSet, nameProp) {
+  return window.L.geoJSON(geojson, {
+    filter: (f) => matchSet.has((f.properties[nameProp] || "").toLowerCase().trim()),
+    style: { fillColor: "#5bb8f5", fillOpacity: 0.35, color: "#2a81cb", weight: 1.2, opacity: 0.7 },
+    interactive: false,
+  });
+}
+
+async function applyGeoHighlight(on, mapInst, layerRef, geoPromise, buildSet, nameProp, setter) {
+  if (layerRef && mapInst) { mapInst.removeLayer(layerRef); setter(null); }
+  if (!on || !mapInst) return;
+  try {
+    const geo = await geoPromise();
+    const set = buildSet();
+    const layer = makeGeoHighlight(geo, set, nameProp);
+    layer.addTo(mapInst);
+    setter(layer);
+  } catch (_) { /* geo load failed — fail silently */ }
+}
+
+function scorersCountries() {
+  const info = loadScorerInfo();
+  const set  = new Set();
+  for (const bp of Object.values(info)) {
+    if (bp.country) set.add(normalizeCountryName(bp.country));
+  }
+  return set;
+}
+function scorersStates() {
+  const info = loadScorerInfo();
+  const set  = new Set();
+  for (const bp of Object.values(info)) {
+    if (bp.state) set.add(normalizeState(bp.state).toLowerCase().trim());
+  }
+  return set;
+}
+function teamsCountries() {
+  const locs = loadTeamLocs();
+  const set  = new Set();
+  for (const loc of Object.values(locs)) {
+    if (loc.country) set.add(normalizeCountryName(loc.country));
+  }
+  return set;
+}
+function teamsStates() {
+  const locs = loadTeamLocs();
+  const set  = new Set();
+  for (const loc of Object.values(locs)) {
+    if (loc.state) set.add(normalizeState(loc.state).toLowerCase().trim());
+  }
+  return set;
+}
+
 filterSport?.addEventListener("change", renderStadiumsTab);
 filterYear?.addEventListener("change",  renderStadiumsTab);
 
@@ -1244,7 +1340,33 @@ function renderStadiumsTab() {
     fullEmpty.hidden = false;
   } else {
     fullEmpty.hidden = true;
-    fullList.innerHTML = filtered.map(eventItemHTML).join("");
+    if (filterYear?.value) {
+      fullList.innerHTML = filtered.map(eventItemHTML).join("");
+    } else {
+      const byYear = new Map();
+      for (const e of filtered) {
+        const year = e.date ? e.date.slice(0, 4) : "Unknown";
+        if (!byYear.has(year)) byYear.set(year, []);
+        byYear.get(year).push(e);
+      }
+      const years = [...byYear.keys()].sort((a, b) => {
+        if (a === "Unknown") return 1;
+        if (b === "Unknown") return -1;
+        return b.localeCompare(a);
+      });
+      fullList.innerHTML = years.map((year, i) => {
+        const evs = byYear.get(year);
+        const open = i === 0 ? " open" : "";
+        return `<details class="year-accordion"${open}>
+          <summary class="year-accordion-head">
+            <span class="year-label">${esc(year)}</span>
+            <span class="year-count">${evs.length} game${evs.length !== 1 ? "s" : ""}</span>
+            <span class="year-chevron" aria-hidden="true">▾</span>
+          </summary>
+          <ul class="event-list year-event-list">${evs.map(eventItemHTML).join("")}</ul>
+        </details>`;
+      }).join("");
+    }
   }
 
   renderStadiumMap(filtered);
@@ -1275,8 +1397,8 @@ function renderStadiumMap(events) {
 
   if (!stadiumMapReady) {
     stadiumMapInstance = window.L.map("events-map").setView([20, 0], 2);
-    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+    window.L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>',
       maxZoom: 19,
     }).addTo(stadiumMapInstance);
     stadiumLayerGroup = window.L.layerGroup().addTo(stadiumMapInstance);
@@ -1627,8 +1749,8 @@ function renderScorersMap() {
 
   if (!scorersMapReady) {
     scorersMapInstance = window.L.map("scorers-map").setView([20, 0], 2);
-    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+    window.L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>',
       maxZoom: 19,
     }).addTo(scorersMapInstance);
     scorersLayerGroup = window.L.layerGroup().addTo(scorersMapInstance);
@@ -1659,6 +1781,11 @@ function renderScorersMap() {
   if (bounds.length === 1) scorersMapInstance.setView(bounds[0], 6);
   else scorersMapInstance.fitBounds(bounds, { padding: [40, 40] });
   window.requestAnimationFrame(() => scorersMapInstance.invalidateSize());
+
+  const scorersToggles = document.getElementById("scorers-geo-toggles");
+  if (scorersToggles) scorersToggles.hidden = false;
+  if (scorersCountryHighlightOn) applyGeoHighlight(true, scorersMapInstance, scorersCountryLayer, getCountriesGeo, scorersCountries, "name", (l) => { scorersCountryLayer = l; });
+  if (scorersStateHighlightOn)   applyGeoHighlight(true, scorersMapInstance, scorersStateLayer,   getStatesGeo,    scorersStates,    "name", (l) => { scorersStateLayer   = l; });
 }
 
 // ── Scorer info storage (birthplace) ─────────────────
@@ -1885,8 +2012,8 @@ function renderTeamsMap() {
 
   if (!teamsMapReady) {
     teamsMapInstance = window.L.map("teams-map").setView([20, 0], 2);
-    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+    window.L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>',
       maxZoom: 19,
     }).addTo(teamsMapInstance);
     teamsLayerGroup = window.L.layerGroup().addTo(teamsMapInstance);
@@ -1921,6 +2048,11 @@ function renderTeamsMap() {
   if (bounds.length === 1) teamsMapInstance.setView(bounds[0], 10);
   else teamsMapInstance.fitBounds(bounds, { padding: [40, 40] });
   window.requestAnimationFrame(() => teamsMapInstance.invalidateSize());
+
+  const teamsToggles = document.getElementById("teams-geo-toggles");
+  if (teamsToggles) teamsToggles.hidden = false;
+  if (teamsCountryHighlightOn) applyGeoHighlight(true, teamsMapInstance, teamsCountryLayer, getCountriesGeo, teamsCountries, "name", (l) => { teamsCountryLayer = l; });
+  if (teamsStateHighlightOn)   applyGeoHighlight(true, teamsMapInstance, teamsStateLayer,   getStatesGeo,    teamsStates,    "name", (l) => { teamsStateLayer   = l; });
 }
 
 // ── Geocoding ─────────────────────────────────────────
@@ -2266,6 +2398,28 @@ document.getElementById("find-match-btn")?.addEventListener("click", async () =>
   } catch (err) {
     if (status) status.textContent = `Error: ${err.message}`;
   }
+});
+
+// ── Map geo highlight toggle handlers ─────────────────
+document.getElementById("scorers-countries-btn")?.addEventListener("click", function() {
+  scorersCountryHighlightOn = !scorersCountryHighlightOn;
+  this.classList.toggle("active", scorersCountryHighlightOn);
+  applyGeoHighlight(scorersCountryHighlightOn, scorersMapInstance, scorersCountryLayer, getCountriesGeo, scorersCountries, "name", (l) => { scorersCountryLayer = l; });
+});
+document.getElementById("scorers-states-btn")?.addEventListener("click", function() {
+  scorersStateHighlightOn = !scorersStateHighlightOn;
+  this.classList.toggle("active", scorersStateHighlightOn);
+  applyGeoHighlight(scorersStateHighlightOn, scorersMapInstance, scorersStateLayer, getStatesGeo, scorersStates, "name", (l) => { scorersStateLayer = l; });
+});
+document.getElementById("teams-countries-btn")?.addEventListener("click", function() {
+  teamsCountryHighlightOn = !teamsCountryHighlightOn;
+  this.classList.toggle("active", teamsCountryHighlightOn);
+  applyGeoHighlight(teamsCountryHighlightOn, teamsMapInstance, teamsCountryLayer, getCountriesGeo, teamsCountries, "name", (l) => { teamsCountryLayer = l; });
+});
+document.getElementById("teams-states-btn")?.addEventListener("click", function() {
+  teamsStateHighlightOn = !teamsStateHighlightOn;
+  this.classList.toggle("active", teamsStateHighlightOn);
+  applyGeoHighlight(teamsStateHighlightOn, teamsMapInstance, teamsStateLayer, getStatesGeo, teamsStates, "name", (l) => { teamsStateLayer = l; });
 });
 
 async function fillFromFixture(f) {

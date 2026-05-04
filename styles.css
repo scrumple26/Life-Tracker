@@ -465,6 +465,21 @@ textarea { resize: vertical; }
 .year-accordion[open] .year-chevron { transform: rotate(-180deg); }
 .year-event-list { padding: 12px; margin: 0; }
 
+/* ── Map geo toggles ─────────────────────────────────── */
+.map-geo-toggles { display: flex; gap: 8px; padding: 8px 0 4px; flex-wrap: wrap; }
+.map-geo-btn {
+  font-size: 0.78rem;
+  padding: 4px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.map-geo-btn:hover { border-color: #2a81cb; color: #2a81cb; }
+.map-geo-btn.active { background: #2a81cb; color: #fff; border-color: #2a81cb; }
+
 /* ── Team picker ─────────────────────────────────────── */
 .team-picker-wrap {
   position: relative;
