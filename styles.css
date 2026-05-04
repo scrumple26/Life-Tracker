@@ -479,6 +479,9 @@ textarea { resize: vertical; }
 }
 .map-geo-btn:hover { border-color: #2a81cb; color: #2a81cb; }
 .map-geo-btn.active { background: #2a81cb; color: #fff; border-color: #2a81cb; }
+.scorers-country-chip { cursor: pointer; }
+.scorers-country-chip:hover { background: var(--accent-tint, #e8f4fd); border-color: #2a81cb; color: #2a81cb; }
+.scorers-filter-banner { padding: 8px 12px; background: #e8f4fd; border-radius: var(--radius-sm); border: 1px solid #b3d9f5; font-size: 0.875rem; margin-bottom: 8px; }
 
 /* ── Team picker ─────────────────────────────────────── */
 .team-picker-wrap {

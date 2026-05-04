@@ -1411,7 +1411,10 @@ function renderStadiumMap(events) {
   byCoord.forEach(({ lat, lng, venues }) => {
     const venueBlocks = [...venues.values()].map(({ stadium, address, events: evts }) => {
       const lines = [...evts].sort((a, b) => (b.date || "").localeCompare(a.date || ""))
-        .map((e) => `<b>${esc(e.homeTeam)} ${scoreDisplay(e)} ${esc(e.awayTeam)}</b><br>${sportLabel(e.sport)} · ${e.date ? formatDate(e.date) : "Date unknown"}`)
+        .map((e) => `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+          <div><b>${esc(e.homeTeam)} ${scoreDisplay(e)} ${esc(e.awayTeam)}</b><br><span style="color:#666;font-size:0.85em">${sportLabel(e.sport)} · ${e.date ? formatDate(e.date) : "Date unknown"}</span></div>
+          <button type="button" data-action="edit-event" data-id="${esc(e.id)}" style="flex-shrink:0;font-size:0.75em;padding:2px 8px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;white-space:nowrap">Edit</button>
+        </div>`)
         .join("<hr style='margin:4px 0'>");
       return `<b>${esc(stadium)}</b>${address ? `<br><em>${esc(address)}</em>` : ""}<hr style='margin:5px 0'>${lines}`;
     }).join("<hr style='margin:6px 0;border-color:#c8ecea'>");
@@ -1427,6 +1430,13 @@ function renderStadiumMap(events) {
 // ── Scorers tab ───────────────────────────────────────
 const scorersAllList  = document.getElementById("scorers-all-list");
 const scorersAllEmpty = document.getElementById("scorers-all-empty");
+
+document.getElementById("scorers-list-section")?.addEventListener("click", (e) => {
+  if (e.target.id === "scorers-filter-clear") {
+    scorersPlaceFilter = null;
+    renderScorersTab();
+  }
+});
 
 function renderScorersTab() {
   const events = loadEvents();
@@ -1454,9 +1464,29 @@ function renderScorersTab() {
     });
   });
 
-  const scorers = [...byScorer.values()].sort((a, b) => b.goals - a.goals || a.name.localeCompare(b.name));
+  let scorers = [...byScorer.values()].sort((a, b) => b.goals - a.goals || a.name.localeCompare(b.name));
 
   const exportBtn = document.getElementById("export-scorers-btn");
+
+  // Apply place filter if active
+  const filterBanner = document.getElementById("scorers-filter-banner");
+  if (scorersPlaceFilter) {
+    const { value, mode } = scorersPlaceFilter;
+    scorers = scorers.filter((s) => {
+      const bp = info[s.key] || null;
+      if (!bp) return false;
+      if (mode === "country") return (bp.country || "").trim().toLowerCase() === value.toLowerCase();
+      if (mode === "state")   return normalizeState(bp.state || "").toLowerCase() === value.toLowerCase();
+      return false;
+    });
+    if (filterBanner) {
+      filterBanner.hidden = false;
+      filterBanner.innerHTML = `Showing scorers from <strong>${esc(scorersPlaceFilter.value)}</strong> &nbsp;<button type="button" class="btn btn-sm" id="scorers-filter-clear">Clear</button>`;
+    }
+  } else {
+    if (filterBanner) filterBanner.hidden = true;
+  }
+
   if (!scorers.length) {
     scorersAllList.innerHTML = "";
     scorersAllEmpty.hidden = false;
@@ -1464,7 +1494,7 @@ function renderScorersTab() {
     return;
   }
   scorersAllEmpty.hidden = true;
-  if (exportBtn) exportBtn.hidden = false;
+  if (exportBtn) exportBtn.hidden = !scorersPlaceFilter;
   scorersAllList.innerHTML = scorers.map((s) => {
     const bp  = info[s.key] || null;
     const bpText = bp ? [bp.city, normalizeState(bp.state), bp.country].filter(Boolean).join(", ") : "";
@@ -1561,6 +1591,7 @@ let scorersMapInstance = null;
 let scorersMapReady    = false;
 let scorersLayerGroup  = null;
 let scorersStatMode    = "countries"; // "countries" | "states"
+let scorersPlaceFilter = null; // { value: string, mode: "country"|"state" } or null
 
 document.querySelectorAll("[data-sview]").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -1662,7 +1693,7 @@ function renderScorersStats(scorers, el) {
     const total = byCountry.size;
     const pct   = ((total / TOTAL_COUNTRIES) * 100).toFixed(1);
     summaryHtml = `<strong>${total}</strong> / ${TOTAL_COUNTRIES} countries <span class="scorers-pct">(${pct}%)</span>`;
-    chipsHtml   = sorted.map(([c, n]) => `<span class="scorers-country-chip">${esc(c)} <strong>${n}</strong></span>`).join("");
+    chipsHtml   = sorted.map(([c, n]) => `<button type="button" class="scorers-country-chip" data-filter-place="${esc(c)}" data-filter-mode="country">${esc(c)} <strong>${n}</strong></button>`).join("");
   } else {
     const usScorers = scorers.filter(isUSScorer);
     const byState = new Map();
@@ -1674,7 +1705,7 @@ function renderScorersStats(scorers, el) {
     const total = byState.size;
     const pct   = ((total / TOTAL_US_STATES) * 100).toFixed(1);
     summaryHtml = `<strong>${total}</strong> / ${TOTAL_US_STATES} US states <span class="scorers-pct">(${pct}%)</span>`;
-    chipsHtml   = sorted.map(([st, n]) => `<span class="scorers-country-chip">${esc(st)} <strong>${n}</strong></span>`).join("")
+    chipsHtml   = sorted.map(([st, n]) => `<button type="button" class="scorers-country-chip" data-filter-place="${esc(st)}" data-filter-mode="state">${esc(st)} <strong>${n}</strong></button>`).join("")
       || `<span class="scorers-pct">No US birthplaces recorded yet.</span>`;
   }
 
@@ -1693,6 +1724,15 @@ function renderScorersStats(scorers, el) {
 
 // Stat mode toggle delegation
 document.getElementById("scorers-map-section")?.addEventListener("click", (e) => {
+  const chip = e.target.closest("[data-filter-place]");
+  if (chip) {
+    scorersPlaceFilter = { value: chip.dataset.filterPlace, mode: chip.dataset.filterMode };
+    // Switch to list view and re-render with filter
+    document.querySelector("[data-sview='list']")?.click();
+    renderScorersTab();
+    document.getElementById("scorers-list-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
   const btn = e.target.closest("[data-statmode]");
   if (!btn) return;
   scorersStatMode = btn.dataset.statmode;
