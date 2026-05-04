@@ -27,10 +27,14 @@ let auth    = null;
 let db      = null;
 let storage = null;
 if (firebaseReady) {
-  const app = initializeApp(config);
-  auth    = getAuth(app);
-  db      = getFirestore(app);
-  storage = getStorage(app);
+  try {
+    const app = initializeApp(config);
+    auth    = getAuth(app);
+    db      = getFirestore(app);
+    storage = getStorage(app);
+  } catch (err) {
+    console.error("Firebase init failed:", err);
+  }
 }
 
 // ── State ─────────────────────────────────────────────
@@ -182,19 +186,28 @@ signinForm?.addEventListener("submit", async (e) => {
   const email = signinEmail.value.trim().toLowerCase();
   const password = signinPassword.value;
   if (!email || !password) { setAuthMsg("Enter email and password.", true); return; }
+  const btn = signinForm.querySelector("button[type='submit']");
+  const origText = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = "Signing in…"; }
+  setAuthMsg("");
   try {
     await signInWithEmailAndPassword(auth, email, password);
     signinForm.reset();
-    setAuthMsg("");
   } catch (err) {
+    console.error("Sign-in error:", err);
     const code = err?.code || "";
     if (code.includes("invalid-credential") || code.includes("user-not-found") || code.includes("wrong-password")) {
       setAuthMsg("Invalid email or password.", true);
     } else if (code.includes("too-many-requests")) {
       setAuthMsg("Too many attempts. Try again in a bit.", true);
+    } else if (code.includes("network-request-failed")) {
+      setAuthMsg("Network error — check your connection.", true);
+    } else if (code.includes("unauthorized-domain")) {
+      setAuthMsg("This domain isn't authorized in Firebase. Add it in the Firebase console.", true);
     } else {
-      setAuthMsg("Unable to sign in right now.", true);
+      setAuthMsg(`Unable to sign in (${code || "unknown error"}).`, true);
     }
+    if (btn) { btn.disabled = false; btn.textContent = origText; }
   }
 });
 
@@ -210,13 +223,24 @@ registerForm?.addEventListener("submit", async (e) => {
   if (!/[a-z]/.test(password)) { setAuthMsg("Password must include a lowercase letter.", true); return; }
   if (!/[0-9]/.test(password)) { setAuthMsg("Password must include a number.", true); return; }
   if (password !== confirm)    { setAuthMsg("Passwords do not match.", true); return; }
+  const btn = registerForm.querySelector("button[type='submit']");
+  const origText = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = "Creating account…"; }
+  setAuthMsg("");
   try {
     await createUserWithEmailAndPassword(auth, email, password);
     registerForm.reset();
-    setAuthMsg("");
   } catch (err) {
+    console.error("Register error:", err);
     const code = err?.code || "";
-    setAuthMsg(code.includes("email-already-in-use") ? "An account with that email already exists." : "Unable to create account right now.", true);
+    if (code.includes("email-already-in-use")) {
+      setAuthMsg("An account with that email already exists.", true);
+    } else if (code.includes("network-request-failed")) {
+      setAuthMsg("Network error — check your connection.", true);
+    } else {
+      setAuthMsg(`Unable to create account (${code || "unknown error"}).`, true);
+    }
+    if (btn) { btn.disabled = false; btn.textContent = origText; }
   }
 });
 
