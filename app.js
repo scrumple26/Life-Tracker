@@ -1,4 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+import { initializeApp } from "https://esm.sh/firebase@12.7.0/app";
 import {
   getAuth,
   onAuthStateChanged,
@@ -6,19 +6,19 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signOut,
-} from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
+} from "https://esm.sh/firebase@12.7.0/auth";
 import {
   getFirestore,
   doc,
   getDoc,
   setDoc,
-} from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
+} from "https://esm.sh/firebase@12.7.0/firestore";
 import {
   getStorage,
   ref as storageRef,
   uploadBytes,
   getDownloadURL,
-} from "https://www.gstatic.com/firebasejs/12.7.0/firebase-storage.js";
+} from "https://esm.sh/firebase@12.7.0/storage";
 
 // ── Diagnostic ────────────────────────────────────────
 { const d = document.getElementById("js-diag"); if (d) d.textContent = "JS: module loaded, Firebase initializing…"; }
