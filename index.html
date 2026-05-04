@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="/vendor/leaflet.css" />
 </head>
 <body>
   <main id="main" class="page">
@@ -426,8 +426,9 @@
   <script src="/vendor/firebase-firestore-compat.js"></script>
   <script src="/vendor/firebase-storage-compat.js"></script>
   <script src="firebase-config.js"></script>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>document.getElementById("js-diag").textContent = "JS: page scripts OK, loading app…";</script>
+  <script src="/vendor/leaflet.js"></script>
+  <script>document.getElementById("js-diag").textContent = "JS: all scripts loaded, running app…";</script>
   <script src="app-main.js"></script>
+  <script>document.getElementById("js-diag").textContent = "JS: app-main.js loaded (check for runtime error)";</script>
 </body>
 </html>
