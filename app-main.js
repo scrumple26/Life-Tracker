@@ -1293,7 +1293,7 @@ function renderStadiumMap(events) {
         .join("<hr style='margin:4px 0'>");
       return `<b>${esc(stadium)}</b>${address ? `<br><em>${esc(address)}</em>` : ""}<hr style='margin:5px 0'>${lines}`;
     }).join("<hr style='margin:6px 0;border-color:#c8ecea'>");
-    window.L.marker([lat, lng]).addTo(stadiumLayerGroup).bindPopup(venueBlocks, { maxHeight: 220 });
+    window.L.marker([lat, lng], { icon: singlePinIcon() }).addTo(stadiumLayerGroup).bindPopup(venueBlocks, { maxHeight: 220 });
     bounds.push([lat, lng]);
   });
 
@@ -1651,7 +1651,7 @@ function renderScorersMap() {
     const bpText  = [first.bp.city, normalizeState(first.bp.state), first.bp.country].filter(Boolean).join(", ");
     const lines   = locScorers.map((s) => `<b>${esc(s.name)}</b> — ${s.goals} ${s.goals === 1 ? "goal" : "goals"}`).join("<br>");
     const popup   = `<em>${esc(bpText)}</em><hr style='margin:5px 0'>${lines}`;
-    const icon    = locScorers.length > 1 ? teamCountIcon(locScorers.length) : new window.L.Icon.Default();
+    const icon    = locScorers.length > 1 ? teamCountIcon(locScorers.length) : singlePinIcon();
     window.L.marker([lat, lng], { icon }).addTo(scorersLayerGroup).bindPopup(popup);
     bounds.push([lat, lng]);
   });
@@ -1840,6 +1840,21 @@ teamsList?.addEventListener("submit", async (e) => {
   renderTeamsTab();
 });
 
+const PIN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
+  <path fill="#2a81cb" stroke="#fff" stroke-width="1.5" d="M12.5 1C6.15 1 1 6.15 1 12.5c0 8.28 11.5 27.5 11.5 27.5S24 20.78 24 12.5C24 6.15 18.85 1 12.5 1z"/>
+  <circle cx="12.5" cy="12.5" r="4.5" fill="white"/>
+</svg>`;
+
+function singlePinIcon() {
+  return window.L.divIcon({
+    className: "",
+    iconSize:    [25, 41],
+    iconAnchor:  [12, 41],
+    popupAnchor: [1, -34],
+    html: PIN_SVG,
+  });
+}
+
 function teamCountIcon(count) {
   return window.L.divIcon({
     className: "",
@@ -1847,8 +1862,7 @@ function teamCountIcon(count) {
     iconAnchor:  [12, 41],
     popupAnchor: [1, -34],
     html: `<div style="position:relative;width:25px;height:41px">
-      <img src="https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png"
-           width="25" height="41" style="position:absolute;top:0;left:0" />
+      ${PIN_SVG}
       <div style="position:absolute;top:-8px;right:-10px;min-width:18px;height:18px;padding:0 4px;
                   border-radius:999px;background:#e53935;color:#fff;font-size:11px;font-weight:700;
                   display:flex;align-items:center;justify-content:center;
@@ -1899,7 +1913,7 @@ function renderTeamsMap() {
       return `<b>${esc(t.name)}</b><hr style='margin:4px 0'>${gameLines}`;
     }).join("<hr style='margin:6px 0;border-color:#c8ecea'>");
     const popup = `<em>${esc(locText)}</em><hr style='margin:5px 0'>${teamBlocks}`;
-    const icon = locTeams.length > 1 ? teamCountIcon(locTeams.length) : new window.L.Icon.Default();
+    const icon = locTeams.length > 1 ? teamCountIcon(locTeams.length) : singlePinIcon();
     window.L.marker([lat, lng], { icon }).addTo(teamsLayerGroup).bindPopup(popup, { maxHeight: 220 });
     bounds.push([lat, lng]);
   });
