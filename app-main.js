@@ -1,7 +1,7 @@
 // Firebase loaded via compat <script> tags — no imports needed
 
 // ── Diagnostic ────────────────────────────────────────
-document.title = "Life Tracker [JS loaded]";
+document.title = "lifelong";
 { const d = document.getElementById("js-diag"); if (d) d.textContent = "JS: module loaded, Firebase initializing…"; }
 
 // ── Firebase init ─────────────────────────────────────
@@ -256,6 +256,9 @@ const tabPanels = {
   scorers:  document.getElementById("tab-scorers"),
   teams:    document.getElementById("tab-teams"),
   photos:   document.getElementById("tab-photos"),
+  restaurants: document.getElementById("tab-restaurants"),
+  trips:       document.getElementById("tab-trips"),
+  concerts:    document.getElementById("tab-concerts"),
 };
 
 document.querySelectorAll(".tab-btn").forEach((btn) => {
@@ -273,6 +276,9 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     if (tab === "scorers")  renderScorersTab();
     if (tab === "teams")    renderTeamsTab();
     if (tab === "photos")   renderPhotosTab();
+    if (tab === "restaurants") renderRestaurantsTab();
+    if (tab === "trips")       renderTripsTab();
+    if (tab === "concerts")    renderConcertsTab();
   });
 });
 
@@ -2159,10 +2165,18 @@ async function initApp() {
       const localEvents     = loadEvents();
       const localTeamLocs   = loadTeamLocs();
       const localScorerInfo = loadScorerInfo();
+      const localRestCats   = loadRestCategories();
+      const localRestaurants = loadRestaurants();
+      const localTrips      = loadTrips();
+      const localConcerts   = loadConcerts();
 
       let mergedEvents     = localEvents;
       let mergedTeamLocs   = localTeamLocs;
       let mergedScorerInfo = localScorerInfo;
+      let mergedRestCats   = localRestCats;
+      let mergedRestaurants = localRestaurants;
+      let mergedTrips      = localTrips;
+      let mergedConcerts   = localConcerts;
 
       if (snap.exists) {
         const data = snap.data();
@@ -2215,13 +2229,27 @@ async function initApp() {
             }
           }
         }
+
+        // Merge module collections: union by id, later updatedAt/createdAt wins on conflict
+        if (Array.isArray(data.restCategories)) mergedRestCats   = mergeArrById(data.restCategories, localRestCats);
+        if (Array.isArray(data.restaurants))    mergedRestaurants = mergeArrById(data.restaurants, localRestaurants);
+        if (Array.isArray(data.trips))          mergedTrips      = mergeArrById(data.trips, localTrips);
+        if (Array.isArray(data.concerts))       mergedConcerts   = mergeArrById(data.concerts, localConcerts);
       }
 
       // Write merged result back to both localStorage and Firestore
       if (evKey) localStorage.setItem(evKey, JSON.stringify(mergedEvents));
       if (tlKey) localStorage.setItem(tlKey, JSON.stringify(mergedTeamLocs));
       if (siKey) localStorage.setItem(siKey, JSON.stringify(mergedScorerInfo));
-      ref.set({ events: mergedEvents, teamLocs: mergedTeamLocs, scorerInfo: mergedScorerInfo }, { merge: true }).catch(() => {});
+      saveLocal(restCategoriesKey(), mergedRestCats);
+      saveLocal(restaurantsKey(), mergedRestaurants);
+      saveLocal(tripsKey(), mergedTrips);
+      saveLocal(concertsKey(), mergedConcerts);
+      ref.set({
+        events: mergedEvents, teamLocs: mergedTeamLocs, scorerInfo: mergedScorerInfo,
+        restCategories: mergedRestCats, restaurants: mergedRestaurants,
+        trips: mergedTrips, concerts: mergedConcerts,
+      }, { merge: true }).catch(() => {});
 
     } catch (err) { console.error("Firestore sync failed:", err); }
   }
@@ -2529,3 +2557,1115 @@ async function fillFromFixture(f) {
     if (status) status.textContent = "✓ Basic info filled (lineups/scorers unavailable)";
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════
+//  lifelong modules — shared helpers (Restaurants · Trips · Concerts)
+// ════════════════════════════════════════════════════════════════════════
+function uid4(prefix) { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`; }
+
+function loadLocal(key, fallback) {
+  try { if (!key) return fallback; const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
+  catch (_) { return fallback; }
+}
+function saveLocal(key, val) { if (key) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (_) {} } }
+
+// Persist an array field to localStorage AND the user's Firestore doc (merge).
+function saveField(field, key, val) {
+  saveLocal(key, val);
+  const ref = userDocRef();
+  if (ref) ref.set({ [field]: val }, { merge: true }).catch(() => {});
+}
+
+// Union two arrays of {id} records; on id conflict keep the later updatedAt/createdAt.
+function mergeArrById(remoteArr, localArr) {
+  const byId = new Map();
+  for (const r of (remoteArr || [])) { if (r && typeof r.id === "string") byId.set(r.id, r); }
+  for (const l of (localArr || [])) {
+    if (!l || typeof l.id !== "string") continue;
+    const ex = byId.get(l.id);
+    if (!ex) { byId.set(l.id, l); continue; }
+    const exTs = new Date(ex.updatedAt || ex.createdAt || 0).getTime();
+    const lTs  = new Date(l.updatedAt  || l.createdAt  || 0).getTime();
+    if (lTs >= exTs) byId.set(l.id, l);
+  }
+  return Array.from(byId.values());
+}
+
+// Interactive 1–5 star picker. action identifies which handler owns it.
+function starInputHTML(rating, action, id) {
+  const r = Number(rating) || 0;
+  let out = `<span class="star-input" data-rate="${esc(action)}"${id != null ? ` data-rate-id="${esc(String(id))}"` : ""}>`;
+  for (let i = 1; i <= 5; i++) out += `<button type="button" class="star-btn${i <= r ? " on" : ""}" data-star="${i}" aria-label="${i} of 5">★</button>`;
+  out += `<button type="button" class="star-btn star-clear${r ? "" : " hidden"}" data-star="0" aria-label="Clear rating">×</button>`;
+  return out + `</span>`;
+}
+function starsStaticHTML(rating) {
+  const r = Number(rating) || 0;
+  if (!r) return `<span class="stars-static none">Not rated</span>`;
+  let out = `<span class="stars-static" title="${r} of 5">`;
+  for (let i = 1; i <= 5; i++) out += `<span class="s${i <= r ? " on" : ""}">★</span>`;
+  return out + `</span>`;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  Restaurants module
+// ════════════════════════════════════════════════════════════════════════
+function restCategoriesKey() { return currentUser ? `life-tracker-rest-cats-${currentUser.uid}` : null; }
+function restaurantsKey()    { return currentUser ? `life-tracker-restaurants-${currentUser.uid}` : null; }
+function loadRestCategories() { const a = loadLocal(restCategoriesKey(), []); return Array.isArray(a) ? a : []; }
+function loadRestaurants()    { const a = loadLocal(restaurantsKey(), []);    return Array.isArray(a) ? a : []; }
+function saveRestCategories(v) { saveField("restCategories", restCategoriesKey(), v); }
+function saveRestaurants(v)    { saveField("restaurants", restaurantsKey(), v); }
+
+const restRoot = document.getElementById("restaurants-root");
+let restActiveCatId = null;
+let restEditingId = null;
+let restDraft = { ordered: [], rating: 0 };
+
+function restOrderedChipsHTML() {
+  return restDraft.ordered
+    .map((it, i) => `<span class="chip">${esc(it)}<button type="button" class="chip-x" data-action="rest-ordered-remove" data-idx="${i}" aria-label="Remove">×</button></span>`)
+    .join("");
+}
+
+function restFormHTML() {
+  const editing = restEditingId ? loadRestaurants().find((r) => r.id === restEditingId) : null;
+  const name    = editing ? esc(editing.name) : "";
+  const address = editing ? esc(editing.address || "") : "";
+  const notes   = editing ? esc(editing.notes || "") : "";
+  return `<form class="mod-form rest-form" data-action="rest-form">
+    <div class="mod-form-row">
+      <input type="text" class="rest-name" maxlength="120" placeholder="Place name" value="${name}" required />
+      <input type="text" class="rest-addr" maxlength="200" placeholder="Address / city (optional)" value="${address}" />
+    </div>
+    <div class="mod-form-row mod-inline-add">
+      <input type="text" class="rest-ordered-input" maxlength="120" placeholder="What you ordered" />
+      <button type="button" class="btn btn-sm" data-action="rest-ordered-add">+ Add item</button>
+    </div>
+    <div class="rest-ordered-chips chip-row">${restOrderedChipsHTML()}</div>
+    <textarea class="rest-notes" rows="2" maxlength="2000" placeholder="Notes">${notes}</textarea>
+    <div class="mod-form-row mod-rate-row">
+      <span class="rate-label">Rating</span> ${starInputHTML(restDraft.rating, "rest-form")}
+    </div>
+    <div class="mod-form-actions">
+      <button type="submit" class="btn btn-sm btn-primary">${editing ? "Save Changes" : "Add Place"}</button>
+      ${editing ? `<button type="button" class="btn btn-sm" data-action="rest-cancel-edit">Cancel</button>` : ""}
+    </div>
+  </form>`;
+}
+
+function restItemHTML(r) {
+  const ordered = Array.isArray(r.ordered) ? r.ordered : [];
+  return `<details class="mod-item rest-item">
+    <summary class="mod-item-head">
+      <span class="mod-item-name">${esc(r.name)}</span>
+      ${starsStaticHTML(r.rating)}
+    </summary>
+    <div class="mod-item-body">
+      ${r.address ? `<p class="mod-item-sub">📍 ${esc(r.address)}</p>` : ""}
+      ${ordered.length ? `<div class="mod-item-ordered"><span class="lbl">Ordered:</span> ${ordered.map((o) => `<span class="chip">${esc(o)}</span>`).join("")}</div>` : ""}
+      ${r.notes ? `<p class="mod-item-notes">${esc(r.notes)}</p>` : ""}
+      <div class="mod-item-actions">
+        <button type="button" class="btn btn-sm" data-action="rest-edit" data-id="${esc(r.id)}">Edit</button>
+        <button type="button" class="btn btn-sm btn-danger" data-action="rest-delete" data-id="${esc(r.id)}">Delete</button>
+      </div>
+    </div>
+  </details>`;
+}
+
+function renderRestaurantsTab() {
+  if (!restRoot) return;
+  const cats  = loadRestCategories().slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  const rests = loadRestaurants();
+  if (restActiveCatId && !cats.some((c) => c.id === restActiveCatId)) restActiveCatId = null;
+  if (!restActiveCatId && cats.length) restActiveCatId = cats[0].id;
+
+  let html = `<div class="rest-cat-bar">`;
+  html += cats.map((c) => {
+    const count = rests.filter((r) => r.categoryId === c.id).length;
+    return `<button type="button" class="rest-cat-tab${c.id === restActiveCatId ? " active" : ""}" data-action="rest-cat" data-id="${esc(c.id)}">${esc(c.name)} <span class="rest-cat-count">${count}</span></button>`;
+  }).join("");
+  html += `<button type="button" class="rest-cat-add-btn" data-action="rest-cat-add">+ Category</button>`;
+  html += `</div>`;
+
+  html += `<form class="rest-cat-form mod-inline-add" data-action="rest-cat-form" hidden>
+    <input type="text" class="rest-cat-name" maxlength="60" placeholder="Category name (e.g. Breweries, Pizza)" />
+    <button type="submit" class="btn btn-sm btn-primary">Add</button>
+    <button type="button" class="btn btn-sm" data-action="rest-cat-cancel">Cancel</button>
+  </form>`;
+
+  if (!cats.length) {
+    html += `<p class="empty-state">No categories yet. Create one — like “Breweries” or “Pizza” — to start adding places.</p>`;
+    restRoot.innerHTML = html;
+    return;
+  }
+
+  const cat = cats.find((c) => c.id === restActiveCatId);
+  const catRests = rests.filter((r) => r.categoryId === restActiveCatId)
+    .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+
+  html += `<div class="mod-section-head">
+    <h3>${esc(cat.name)}</h3>
+    <div class="mod-section-head-actions">
+      <button type="button" class="btn btn-sm" data-action="rest-cat-rename" data-id="${esc(cat.id)}">Rename</button>
+      <button type="button" class="btn btn-sm btn-danger" data-action="rest-cat-delete" data-id="${esc(cat.id)}">Delete Category</button>
+    </div>
+  </div>`;
+
+  html += restFormHTML();
+
+  if (!catRests.length) {
+    html += `<p class="empty-state">No places in “${esc(cat.name)}” yet.</p>`;
+  } else {
+    html += `<div class="mod-list">` + catRests.map(restItemHTML).join("") + `</div>`;
+  }
+  restRoot.innerHTML = html;
+}
+
+function refreshRestStars() {
+  const span = restRoot.querySelector(".star-input[data-rate='rest-form']");
+  if (span) span.outerHTML = starInputHTML(restDraft.rating, "rest-form");
+}
+function refreshRestChips() {
+  const box = restRoot.querySelector(".rest-ordered-chips");
+  if (box) box.innerHTML = restOrderedChipsHTML();
+}
+function addRestOrdered() {
+  const input = restRoot.querySelector(".rest-ordered-input");
+  if (!input) return;
+  const v = input.value.trim();
+  if (!v) return;
+  restDraft.ordered.push(v);
+  input.value = "";
+  refreshRestChips();
+  input.focus();
+}
+function startRestEdit(id) {
+  const r = loadRestaurants().find((x) => x.id === id);
+  if (!r) return;
+  restEditingId = id;
+  restDraft = { ordered: Array.isArray(r.ordered) ? [...r.ordered] : [], rating: Number(r.rating) || 0 };
+  renderRestaurantsTab();
+  restRoot.querySelector(".rest-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function submitRestCat(form) {
+  const input = form.querySelector(".rest-cat-name");
+  const name = (input?.value || "").trim();
+  if (!name) return;
+  const cats = loadRestCategories();
+  const cat = { id: uid4("rcat"), name, createdAt: new Date().toISOString() };
+  cats.push(cat);
+  saveRestCategories(cats);
+  restActiveCatId = cat.id;
+  renderRestaurantsTab();
+}
+function submitRestaurant(form) {
+  if (!currentUser || !restActiveCatId) return;
+  const name = (form.querySelector(".rest-name")?.value || "").trim();
+  if (!name) return;
+  const address = (form.querySelector(".rest-addr")?.value || "").trim();
+  const notes   = (form.querySelector(".rest-notes")?.value || "").trim();
+  const rests = loadRestaurants();
+  const now = new Date().toISOString();
+  if (restEditingId) {
+    const idx = rests.findIndex((r) => r.id === restEditingId);
+    if (idx !== -1) {
+      rests[idx] = { ...rests[idx], name, address, notes, ordered: [...restDraft.ordered], rating: restDraft.rating, updatedAt: now };
+    }
+  } else {
+    rests.push({ id: uid4("rest"), categoryId: restActiveCatId, name, address, notes,
+      ordered: [...restDraft.ordered], rating: restDraft.rating, createdAt: now, updatedAt: now });
+  }
+  saveRestaurants(rests);
+  restEditingId = null;
+  restDraft = { ordered: [], rating: 0 };
+  renderRestaurantsTab();
+}
+function deleteRestaurant(id) {
+  if (!confirm("Delete this place?")) return;
+  saveRestaurants(loadRestaurants().filter((r) => r.id !== id));
+  if (restEditingId === id) { restEditingId = null; restDraft = { ordered: [], rating: 0 }; }
+  renderRestaurantsTab();
+}
+function renameRestCat(id) {
+  const cats = loadRestCategories();
+  const cat = cats.find((c) => c.id === id);
+  if (!cat) return;
+  const name = prompt("Rename category:", cat.name);
+  if (name == null) return;
+  const n = name.trim();
+  if (!n) return;
+  cat.name = n; cat.updatedAt = new Date().toISOString();
+  saveRestCategories(cats);
+  renderRestaurantsTab();
+}
+function deleteRestCat(id) {
+  const inCat = loadRestaurants().filter((r) => r.categoryId === id);
+  if (!confirm(`Delete this category${inCat.length ? ` and its ${inCat.length} place(s)` : ""}?`)) return;
+  saveRestCategories(loadRestCategories().filter((c) => c.id !== id));
+  if (inCat.length) saveRestaurants(loadRestaurants().filter((r) => r.categoryId !== id));
+  if (restActiveCatId === id) restActiveCatId = null;
+  renderRestaurantsTab();
+}
+
+if (restRoot) {
+  restRoot.addEventListener("click", (e) => {
+    const starBtn = e.target.closest(".star-input[data-rate='rest-form'] .star-btn");
+    if (starBtn) { restDraft.rating = Number(starBtn.dataset.star) || 0; refreshRestStars(); return; }
+    const a = e.target.closest("[data-action]");
+    if (!a) return;
+    switch (a.dataset.action) {
+      case "rest-cat": restActiveCatId = a.dataset.id; restEditingId = null; restDraft = { ordered: [], rating: 0 }; renderRestaurantsTab(); break;
+      case "rest-cat-add": { const f = restRoot.querySelector(".rest-cat-form"); if (f) { f.hidden = false; f.querySelector(".rest-cat-name")?.focus(); } break; }
+      case "rest-cat-cancel": { const f = restRoot.querySelector(".rest-cat-form"); if (f) f.hidden = true; break; }
+      case "rest-ordered-add": addRestOrdered(); break;
+      case "rest-ordered-remove": restDraft.ordered.splice(Number(a.dataset.idx), 1); refreshRestChips(); break;
+      case "rest-edit": startRestEdit(a.dataset.id); break;
+      case "rest-cancel-edit": restEditingId = null; restDraft = { ordered: [], rating: 0 }; renderRestaurantsTab(); break;
+      case "rest-delete": deleteRestaurant(a.dataset.id); break;
+      case "rest-cat-rename": renameRestCat(a.dataset.id); break;
+      case "rest-cat-delete": deleteRestCat(a.dataset.id); break;
+    }
+  });
+  restRoot.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.target.classList.contains("rest-ordered-input")) { e.preventDefault(); addRestOrdered(); }
+  });
+  restRoot.addEventListener("submit", (e) => {
+    if (e.target.classList.contains("rest-cat-form")) { e.preventDefault(); submitRestCat(e.target); }
+    else if (e.target.classList.contains("rest-form")) { e.preventDefault(); submitRestaurant(e.target); }
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  Shared map helpers (Trips · Concerts)
+// ════════════════════════════════════════════════════════════════════════
+function buildLeafletMap(containerEl) {
+  const map = window.L.map(containerEl).setView([20, 0], 2);
+  window.L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>',
+    maxZoom: 19,
+  }).addTo(map);
+  const layer = window.L.layerGroup().addTo(map);
+  return { map, layer };
+}
+function fitMarkers(map, coords) {
+  if (coords.length === 1) map.setView(coords[0], 12);
+  else if (coords.length > 1) map.fitBounds(coords, { padding: [40, 40] });
+}
+function fmtTime(t) {
+  if (!t || !/^\d{1,2}:\d{2}$/.test(t)) return t || "";
+  const [h, m] = t.split(":").map(Number);
+  const ap = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${ap}`;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  Trips module
+// ════════════════════════════════════════════════════════════════════════
+function tripsKey() { return currentUser ? `life-tracker-trips-${currentUser.uid}` : null; }
+function loadTrips() { const a = loadLocal(tripsKey(), []); return Array.isArray(a) ? a : []; }
+function saveTrips(v) { saveField("trips", tripsKey(), v); }
+
+const tripsRoot = document.getElementById("trips-root");
+let tripActiveId = null;        // null → list view
+let tripListView = "list";      // "list" | "map"
+let tripDetailView = "stops";   // "stops" | "itinerary" | "map"
+let tripLocEditingId = null;
+let tripLocDraft = { rating: 0 };
+let tripMapObj = null;
+
+function destroyTripMap() { if (tripMapObj) { try { tripMapObj.map.remove(); } catch (_) {} tripMapObj = null; } }
+
+function sortTripLocs(locs) {
+  return locs.slice().sort((a, b) => {
+    const ad = a.date || "", bd = b.date || "";
+    if (ad !== bd) { if (!ad) return 1; if (!bd) return -1; return ad.localeCompare(bd); }
+    const at = a.time || "", bt = b.time || "";
+    if (at !== bt) { if (!at) return 1; if (!bt) return -1; return at.localeCompare(bt); }
+    return (a.createdAt || "").localeCompare(b.createdAt || "");
+  });
+}
+
+function renderTripsTab() {
+  if (!tripsRoot) return;
+  if (tripActiveId && !loadTrips().some((t) => t.id === tripActiveId)) tripActiveId = null;
+  if (tripActiveId) renderTripDetail();
+  else renderTripList();
+}
+
+function tripCardHTML(t) {
+  const locs = Array.isArray(t.locations) ? t.locations : [];
+  const rated = locs.filter((l) => l.rating);
+  const avg = rated.length ? Math.round(rated.reduce((s, l) => s + l.rating, 0) / rated.length) : 0;
+  return `<div class="trip-card">
+    <button type="button" class="trip-card-main" data-action="trip-open" data-id="${esc(t.id)}">
+      <span class="trip-card-name">${esc(t.name)}</span>
+      <span class="trip-card-meta">${locs.length} stop${locs.length !== 1 ? "s" : ""}${avg ? ` · ${starsStaticHTML(avg)}` : ""}</span>
+    </button>
+    <button type="button" class="btn btn-sm btn-danger" data-action="trip-delete" data-id="${esc(t.id)}">Delete</button>
+  </div>`;
+}
+
+function renderTripList() {
+  destroyTripMap();
+  const trips = loadTrips().slice().sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+  let html = `<div class="mod-section-head">
+    <div class="view-toggle">
+      <button class="view-btn${tripListView === "list" ? " active" : ""}" data-action="trip-listview" data-view="list">Trips</button>
+      <button class="view-btn${tripListView === "map" ? " active" : ""}" data-action="trip-listview" data-view="map">All on Map</button>
+    </div>
+  </div>`;
+  html += `<form class="mod-inline-add trip-add-form" data-action="trip-add-form">
+    <input type="text" class="trip-name-input" maxlength="120" placeholder="New trip name (e.g. Italy 2025)" required />
+    <button type="submit" class="btn btn-sm btn-primary">+ Add Trip</button>
+  </form>`;
+  if (tripListView === "map") {
+    html += `<div id="trips-allmap" class="map-container"></div><p class="map-hint" id="trips-allmap-hint"></p>`;
+    tripsRoot.innerHTML = html;
+    renderAllTripsMap();
+    return;
+  }
+  if (!trips.length) html += `<p class="empty-state">No trips yet. Add one above to start planning.</p>`;
+  else html += `<div class="mod-list trip-cards">` + trips.map(tripCardHTML).join("") + `</div>`;
+  tripsRoot.innerHTML = html;
+  geocodeTripsPending();
+}
+
+function tripLocFormHTML() {
+  const trip = loadTrips().find((t) => t.id === tripActiveId);
+  const editing = tripLocEditingId && trip ? (trip.locations || []).find((l) => l.id === tripLocEditingId) : null;
+  const name  = editing ? esc(editing.name) : "";
+  const addr  = editing ? esc(editing.address || "") : "";
+  const date  = editing ? esc(editing.date || "") : "";
+  const time  = editing ? esc(editing.time || "") : "";
+  const notes = editing ? esc(editing.notes || "") : "";
+  return `<form class="mod-form trip-loc-form" data-action="trip-loc-form">
+    <div class="mod-form-row">
+      <input type="text" class="tl-name" maxlength="120" placeholder="Place / stop name" value="${name}" required />
+      <input type="text" class="tl-addr" maxlength="200" placeholder="Address / city (for the map)" value="${addr}" />
+    </div>
+    <div class="mod-form-row">
+      <label class="mod-mini-label">Date <input type="date" class="tl-date" value="${date}" /></label>
+      <label class="mod-mini-label">Time <input type="time" class="tl-time" value="${time}" /></label>
+    </div>
+    <textarea class="tl-notes" rows="2" maxlength="2000" placeholder="Notes">${notes}</textarea>
+    <div class="mod-form-row mod-rate-row"><span class="rate-label">Rating</span> ${starInputHTML(tripLocDraft.rating, "trip-loc-form")}</div>
+    <div class="mod-form-actions">
+      <button type="submit" class="btn btn-sm btn-primary">${editing ? "Save Changes" : "Add Stop"}</button>
+      ${editing ? `<button type="button" class="btn btn-sm" data-action="trip-loc-cancel">Cancel</button>` : ""}
+    </div>
+  </form>`;
+}
+
+function tripLocItemHTML(l) {
+  const when = [l.date ? formatDate(l.date) : "", l.time ? fmtTime(l.time) : ""].filter(Boolean).join(" · ");
+  return `<details class="mod-item">
+    <summary class="mod-item-head">
+      <span class="mod-item-name">${esc(l.name)}</span>
+      ${starsStaticHTML(l.rating)}
+    </summary>
+    <div class="mod-item-body">
+      ${when ? `<p class="mod-item-sub">🕒 ${esc(when)}</p>` : ""}
+      ${l.address ? `<p class="mod-item-sub">📍 ${esc(l.address)}</p>` : ""}
+      ${l.notes ? `<p class="mod-item-notes">${esc(l.notes)}</p>` : ""}
+      <div class="mod-item-actions">
+        <button type="button" class="btn btn-sm" data-action="trip-loc-edit" data-id="${esc(l.id)}">Edit</button>
+        <button type="button" class="btn btn-sm btn-danger" data-action="trip-loc-delete" data-id="${esc(l.id)}">Delete</button>
+      </div>
+    </div>
+  </details>`;
+}
+
+function renderItineraryHTML(locs) {
+  if (!locs.length) return `<p class="empty-state">No stops to show yet. Add some on the Stops tab.</p>`;
+  const sorted = sortTripLocs(locs);
+  const groups = new Map();
+  for (const l of sorted) {
+    const key = l.date || "__none";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(l);
+  }
+  let out = `<div class="itinerary">`;
+  for (const [key, items] of groups) {
+    const heading = key === "__none" ? "Unscheduled" : formatDate(key);
+    out += `<div class="itin-day"><h4 class="itin-day-head">${esc(heading)}</h4>`;
+    out += items.map((l) => `<div class="itin-stop">
+      <div class="itin-time">${l.time ? esc(fmtTime(l.time)) : "—"}</div>
+      <div class="itin-body">
+        <div class="itin-name">${esc(l.name)} ${l.rating ? starsStaticHTML(l.rating) : ""}</div>
+        ${l.address ? `<div class="itin-addr">📍 ${esc(l.address)}</div>` : ""}
+        ${l.notes ? `<div class="itin-notes">${esc(l.notes)}</div>` : ""}
+      </div>
+    </div>`).join("");
+    out += `</div>`;
+  }
+  return out + `</div>`;
+}
+
+function renderTripDetail() {
+  const trip = loadTrips().find((t) => t.id === tripActiveId);
+  if (!trip) { tripActiveId = null; renderTripList(); return; }
+  if (tripDetailView !== "map") destroyTripMap();
+  const locs = (trip.locations || []).slice();
+  let html = `<div class="mod-detail-head">
+    <button type="button" class="btn btn-sm mod-back" data-action="trip-back">← Trips</button>
+    <h3 class="mod-detail-title">${esc(trip.name)}</h3>
+    <div class="mod-section-head-actions">
+      <button type="button" class="btn btn-sm" data-action="trip-rename" data-id="${esc(trip.id)}">Rename</button>
+      <button type="button" class="btn btn-sm btn-danger" data-action="trip-delete" data-id="${esc(trip.id)}">Delete</button>
+    </div>
+  </div>`;
+  html += `<div class="view-toggle">
+    <button class="view-btn${tripDetailView === "stops" ? " active" : ""}" data-action="trip-detailview" data-view="stops">Stops</button>
+    <button class="view-btn${tripDetailView === "itinerary" ? " active" : ""}" data-action="trip-detailview" data-view="itinerary">Itinerary</button>
+    <button class="view-btn${tripDetailView === "map" ? " active" : ""}" data-action="trip-detailview" data-view="map">Map</button>
+  </div>`;
+
+  if (tripDetailView === "stops") {
+    html += tripLocFormHTML();
+    if (!locs.length) html += `<p class="empty-state">No stops yet. Add the places you visited above.</p>`;
+    else html += `<div class="mod-list">` + sortTripLocs(locs).map(tripLocItemHTML).join("") + `</div>`;
+  } else if (tripDetailView === "itinerary") {
+    html += renderItineraryHTML(locs);
+  } else {
+    html += `<div id="trip-detail-map" class="map-container"></div><p class="map-hint" id="trip-detail-map-hint"></p>`;
+  }
+  tripsRoot.innerHTML = html;
+  if (tripDetailView === "map") renderTripDetailMap(trip);
+  else geocodeTripsPending();
+}
+
+function renderTripDetailMap(trip) {
+  const el = document.getElementById("trip-detail-map");
+  const hint = document.getElementById("trip-detail-map-hint");
+  if (!el || !window.L) return;
+  destroyTripMap();
+  tripMapObj = buildLeafletMap(el);
+  const located = (trip.locations || []).filter((l) => typeof l.lat === "number" && typeof l.lng === "number");
+  const coords = [];
+  sortTripLocs(located).forEach((l) => {
+    window.L.marker([l.lat, l.lng], { icon: singlePinIcon() }).addTo(tripMapObj.layer)
+      .bindPopup(`<b>${esc(l.name)}</b>${l.address ? `<br>${esc(l.address)}` : ""}`);
+    coords.push([l.lat, l.lng]);
+  });
+  fitMarkers(tripMapObj.map, coords);
+  const total = (trip.locations || []).length;
+  if (hint) hint.textContent = located.length < total
+    ? `${total - located.length} stop(s) not yet on the map — addresses are geocoded in the background.`
+    : (located.length ? "" : "No mapped stops yet — add an address to each stop.");
+  setTimeout(() => { try { tripMapObj && tripMapObj.map.invalidateSize(); } catch (_) {} }, 120);
+  geocodeTripsPending();
+}
+
+function renderAllTripsMap() {
+  const el = document.getElementById("trips-allmap");
+  const hint = document.getElementById("trips-allmap-hint");
+  if (!el || !window.L) return;
+  destroyTripMap();
+  tripMapObj = buildLeafletMap(el);
+  const trips = loadTrips();
+  const coords = [];
+  let total = 0, located = 0;
+  trips.forEach((t) => {
+    (t.locations || []).forEach((l) => {
+      total++;
+      if (typeof l.lat === "number" && typeof l.lng === "number") {
+        located++;
+        window.L.marker([l.lat, l.lng], { icon: singlePinIcon() }).addTo(tripMapObj.layer)
+          .bindPopup(`<b>${esc(l.name)}</b><br><span style="color:#666">${esc(t.name)}</span>${l.address ? `<br>${esc(l.address)}` : ""}`);
+        coords.push([l.lat, l.lng]);
+      }
+    });
+  });
+  fitMarkers(tripMapObj.map, coords);
+  if (hint) hint.textContent = located
+    ? (located < total ? `Showing ${located} of ${total} stops (others still geocoding).` : `Showing all ${located} stop(s) across ${trips.length} trip(s).`)
+    : "No mapped stops yet — add addresses to your trip stops.";
+  setTimeout(() => { try { tripMapObj && tripMapObj.map.invalidateSize(); } catch (_) {} }, 120);
+  geocodeTripsPending();
+}
+
+let tripsGeocoding = false;
+async function geocodeTripsPending() {
+  if (tripsGeocoding || !currentUser) return;
+  const trips = loadTrips();
+  const pending = [];
+  trips.forEach((t) => (t.locations || []).forEach((l) => { if (l.address && l.lat == null) pending.push(l); }));
+  if (!pending.length) return;
+  tripsGeocoding = true;
+  let changed = false;
+  for (const l of pending) {
+    await new Promise((r) => setTimeout(r, 1200));
+    const c = (await nominatimSearch(`${l.name}, ${l.address}`)) || (await nominatimSearch(l.address));
+    if (c) { l.lat = c.lat; l.lng = c.lng; changed = true; }
+  }
+  if (changed) {
+    saveTrips(trips);
+    if (activeTab === "trips") {
+      if (tripActiveId && tripDetailView === "map") { const t = trips.find((x) => x.id === tripActiveId); if (t) renderTripDetailMap(t); }
+      else if (!tripActiveId && tripListView === "map") renderAllTripsMap();
+    }
+  }
+  tripsGeocoding = false;
+}
+
+function submitTrip(form) {
+  const input = form.querySelector(".trip-name-input");
+  const name = (input?.value || "").trim();
+  if (!name) return;
+  const now = new Date().toISOString();
+  const trips = loadTrips();
+  trips.push({ id: uid4("trip"), name, locations: [], createdAt: now, updatedAt: now });
+  saveTrips(trips);
+  if (input) input.value = "";
+  renderTripList();
+}
+function submitTripLoc(form) {
+  const trips = loadTrips();
+  const trip = trips.find((t) => t.id === tripActiveId);
+  if (!trip) return;
+  if (!Array.isArray(trip.locations)) trip.locations = [];
+  const name = (form.querySelector(".tl-name")?.value || "").trim();
+  if (!name) return;
+  const address = (form.querySelector(".tl-addr")?.value || "").trim();
+  const date = form.querySelector(".tl-date")?.value || "";
+  const time = form.querySelector(".tl-time")?.value || "";
+  const notes = (form.querySelector(".tl-notes")?.value || "").trim();
+  const now = new Date().toISOString();
+  if (tripLocEditingId) {
+    const l = trip.locations.find((x) => x.id === tripLocEditingId);
+    if (l) {
+      const addrChanged = (l.address || "") !== address;
+      l.name = name; l.address = address; l.date = date; l.time = time; l.notes = notes; l.rating = tripLocDraft.rating;
+      if (addrChanged) { l.lat = null; l.lng = null; }
+      l.updatedAt = now;
+    }
+  } else {
+    trip.locations.push({ id: uid4("tloc"), name, address, date, time, notes, rating: tripLocDraft.rating, lat: null, lng: null, createdAt: now, updatedAt: now });
+  }
+  trip.updatedAt = now;
+  saveTrips(trips);
+  tripLocEditingId = null;
+  tripLocDraft = { rating: 0 };
+  renderTripDetail();
+}
+function startTripLocEdit(id) {
+  const trip = loadTrips().find((t) => t.id === tripActiveId);
+  const l = trip && (trip.locations || []).find((x) => x.id === id);
+  if (!l) return;
+  tripLocEditingId = id;
+  tripLocDraft = { rating: Number(l.rating) || 0 };
+  tripDetailView = "stops";
+  renderTripDetail();
+  tripsRoot.querySelector(".trip-loc-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function deleteTripLoc(id) {
+  if (!confirm("Delete this stop?")) return;
+  const trips = loadTrips();
+  const trip = trips.find((t) => t.id === tripActiveId);
+  if (!trip) return;
+  trip.locations = (trip.locations || []).filter((l) => l.id !== id);
+  trip.updatedAt = new Date().toISOString();
+  saveTrips(trips);
+  if (tripLocEditingId === id) { tripLocEditingId = null; tripLocDraft = { rating: 0 }; }
+  renderTripDetail();
+}
+function deleteTrip(id) {
+  const t = loadTrips().find((x) => x.id === id);
+  if (!t) return;
+  const n = (t.locations || []).length;
+  if (!confirm(`Delete trip “${t.name}”${n ? ` and its ${n} stop(s)` : ""}?`)) return;
+  saveTrips(loadTrips().filter((x) => x.id !== id));
+  if (tripActiveId === id) tripActiveId = null;
+  renderTripsTab();
+}
+function renameTrip(id) {
+  const trips = loadTrips();
+  const t = trips.find((x) => x.id === id);
+  if (!t) return;
+  const name = prompt("Rename trip:", t.name);
+  if (name == null) return;
+  const n = name.trim();
+  if (!n) return;
+  t.name = n; t.updatedAt = new Date().toISOString();
+  saveTrips(trips);
+  renderTripsTab();
+}
+
+if (tripsRoot) {
+  tripsRoot.addEventListener("click", (e) => {
+    const starBtn = e.target.closest(".star-input[data-rate='trip-loc-form'] .star-btn");
+    if (starBtn) {
+      tripLocDraft.rating = Number(starBtn.dataset.star) || 0;
+      const s = tripsRoot.querySelector(".star-input[data-rate='trip-loc-form']");
+      if (s) s.outerHTML = starInputHTML(tripLocDraft.rating, "trip-loc-form");
+      return;
+    }
+    const a = e.target.closest("[data-action]");
+    if (!a) return;
+    switch (a.dataset.action) {
+      case "trip-listview": tripListView = a.dataset.view; renderTripList(); break;
+      case "trip-open": tripActiveId = a.dataset.id; tripDetailView = "stops"; tripLocEditingId = null; tripLocDraft = { rating: 0 }; renderTripDetail(); break;
+      case "trip-back": tripActiveId = null; renderTripList(); break;
+      case "trip-detailview": tripDetailView = a.dataset.view; renderTripDetail(); break;
+      case "trip-rename": renameTrip(a.dataset.id); break;
+      case "trip-delete": deleteTrip(a.dataset.id); break;
+      case "trip-loc-edit": startTripLocEdit(a.dataset.id); break;
+      case "trip-loc-cancel": tripLocEditingId = null; tripLocDraft = { rating: 0 }; renderTripDetail(); break;
+      case "trip-loc-delete": deleteTripLoc(a.dataset.id); break;
+    }
+  });
+  tripsRoot.addEventListener("submit", (e) => {
+    if (e.target.classList.contains("trip-add-form")) { e.preventDefault(); submitTrip(e.target); }
+    else if (e.target.classList.contains("trip-loc-form")) { e.preventDefault(); submitTripLoc(e.target); }
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  Concerts module
+// ════════════════════════════════════════════════════════════════════════
+function concertsKey() { return currentUser ? `life-tracker-concerts-${currentUser.uid}` : null; }
+function loadConcerts() { const a = loadLocal(concertsKey(), []); return Array.isArray(a) ? a : []; }
+function saveConcerts(v) { saveField("concerts", concertsKey(), v); }
+
+const concertsRoot = document.getElementById("concerts-root");
+let concertActiveId = null;
+let concertListView = "list";
+let concertMapObj = null;
+
+function getConcert(id) { return loadConcerts().find((c) => c.id === id); }
+function destroyConcertMap() { if (concertMapObj) { try { concertMapObj.map.remove(); } catch (_) {} concertMapObj = null; } }
+
+function renderConcertsTab() {
+  if (!concertsRoot) return;
+  if (concertActiveId && !getConcert(concertActiveId)) concertActiveId = null;
+  if (concertActiveId) renderConcertDetail();
+  else renderConcertList();
+}
+
+function concertCardHTML(c) {
+  const artists = Array.isArray(c.artists) ? c.artists : [];
+  const songs = Array.isArray(c.setlist) ? c.setlist.length : 0;
+  return `<div class="trip-card">
+    <button type="button" class="trip-card-main" data-action="concert-open" data-id="${esc(c.id)}">
+      <span class="trip-card-name">${esc(c.venueName || "Concert")}${artists.length ? ` — ${esc(artists.join(", "))}` : ""}</span>
+      <span class="trip-card-meta">${c.date ? formatDate(c.date) : "Date unknown"}${songs ? ` · ${songs} song${songs !== 1 ? "s" : ""}` : ""}${c.rating ? ` · ${starsStaticHTML(c.rating)}` : ""}</span>
+    </button>
+    <button type="button" class="btn btn-sm btn-danger" data-action="concert-delete" data-id="${esc(c.id)}">Delete</button>
+  </div>`;
+}
+
+function renderConcertList() {
+  destroyConcertMap();
+  const concerts = loadConcerts().slice().sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.createdAt || "").localeCompare(a.createdAt || ""));
+  const totalSongs = concerts.reduce((s, c) => s + (Array.isArray(c.setlist) ? c.setlist.length : 0), 0);
+  let html = `<div class="mod-section-head">
+    <div class="view-toggle">
+      <button class="view-btn${concertListView === "list" ? " active" : ""}" data-action="concert-listview" data-view="list">Concerts</button>
+      <button class="view-btn${concertListView === "map" ? " active" : ""}" data-action="concert-listview" data-view="map">Venue Map</button>
+    </div>
+    ${totalSongs ? `<button type="button" class="btn btn-sm btn-spotify" data-action="concert-export-all">↗ Export all songs to Spotify</button>` : ""}
+  </div>`;
+  html += `<form class="mod-form concert-add-form" data-action="concert-add-form">
+    <div class="mod-form-row">
+      <input type="text" class="concert-venue-input" maxlength="120" placeholder="Venue (e.g. Madison Square Garden)" required />
+      <input type="date" class="concert-date-input" />
+    </div>
+    <div class="mod-form-row">
+      <input type="text" class="concert-addr-input" maxlength="200" placeholder="Address / city (for the map)" />
+      <button type="submit" class="btn btn-sm btn-primary">+ Add Concert</button>
+    </div>
+  </form>`;
+  if (concertListView === "map") {
+    html += `<div id="concerts-map" class="map-container"></div><p class="map-hint" id="concerts-map-hint"></p>`;
+    concertsRoot.innerHTML = html;
+    renderConcertsMap();
+    return;
+  }
+  if (!concerts.length) html += `<p class="empty-state">No concerts yet. Add one above.</p>`;
+  else html += `<div class="mod-list">` + concerts.map(concertCardHTML).join("") + `</div>`;
+  concertsRoot.innerHTML = html;
+  geocodeConcertsPending();
+}
+
+function concertArtistsHTML(c) {
+  const artists = Array.isArray(c.artists) ? c.artists : [];
+  if (!artists.length) return `<span class="muted-mini">No artists yet.</span>`;
+  return artists.map((a, i) => `<span class="chip">${esc(a)}<button type="button" class="chip-x" data-action="concert-artist-remove" data-idx="${i}" aria-label="Remove">×</button></span>`).join("");
+}
+function concertSetlistHTML(c) {
+  const set = Array.isArray(c.setlist) ? c.setlist : [];
+  if (!set.length) return `<li class="muted-mini">No songs yet.</li>`;
+  return set.map((s, i) => `<li class="setlist-row"><span class="setlist-song">${esc(s.song)}</span>${s.artist ? `<span class="setlist-artist">— ${esc(s.artist)}</span>` : ""}<button type="button" class="chip-x" data-action="concert-song-remove" data-idx="${i}" aria-label="Remove">×</button></li>`).join("");
+}
+
+function renderConcertDetail() {
+  const c = getConcert(concertActiveId);
+  if (!c) { concertActiveId = null; renderConcertList(); return; }
+  destroyConcertMap();
+  let html = `<div class="mod-detail-head">
+    <button type="button" class="btn btn-sm mod-back" data-action="concert-back">← Concerts</button>
+    <h3 class="mod-detail-title">${esc(c.venueName || "Concert")}</h3>
+    <button type="button" class="btn btn-sm btn-danger" data-action="concert-delete" data-id="${esc(c.id)}">Delete</button>
+  </div>`;
+  html += `<form class="mod-form concert-meta-form" data-action="concert-meta-form">
+    <div class="mod-form-row">
+      <input type="text" class="cm-venue" maxlength="120" placeholder="Venue" value="${esc(c.venueName || "")}" required />
+      <input type="date" class="cm-date" value="${esc(c.date || "")}" />
+    </div>
+    <input type="text" class="cm-addr" maxlength="200" placeholder="Address / city (for the map)" value="${esc(c.address || "")}" />
+    <textarea class="cm-notes" rows="2" maxlength="2000" placeholder="Notes">${esc(c.notes || "")}</textarea>
+    <div class="mod-form-row mod-rate-row"><span class="rate-label">Rating</span> ${starInputHTML(c.rating, "concert-rating")}</div>
+    <div class="mod-form-actions"><button type="submit" class="btn btn-sm btn-primary">Save Details</button></div>
+  </form>`;
+  html += `<div class="concert-block">
+    <h4>Artists</h4>
+    <div class="mod-inline-add">
+      <input type="text" class="concert-artist-input" maxlength="120" placeholder="Add an artist" />
+      <button type="button" class="btn btn-sm" data-action="concert-artist-add">+ Add</button>
+    </div>
+    <div class="concert-artists chip-row">${concertArtistsHTML(c)}</div>
+  </div>`;
+  html += `<div class="concert-block">
+    <div class="concert-block-head">
+      <h4>Setlist</h4>
+      <button type="button" class="btn btn-sm btn-spotify" data-action="concert-export-set" data-id="${esc(c.id)}">↗ Export to Spotify</button>
+    </div>
+    <div class="mod-inline-add concert-song-add">
+      <input type="text" class="concert-song-input" maxlength="160" placeholder="Song title" />
+      <input type="text" class="concert-song-artist" maxlength="120" placeholder="Artist (optional)" />
+      <button type="button" class="btn btn-sm" data-action="concert-song-add">+ Add</button>
+    </div>
+    <ol class="concert-setlist">${concertSetlistHTML(c)}</ol>
+  </div>`;
+  concertsRoot.innerHTML = html;
+  geocodeConcertsPending();
+}
+
+function renderConcertsMap() {
+  const el = document.getElementById("concerts-map");
+  const hint = document.getElementById("concerts-map-hint");
+  if (!el || !window.L) return;
+  destroyConcertMap();
+  concertMapObj = buildLeafletMap(el);
+  const concerts = loadConcerts();
+  const coords = [];
+  let total = 0, located = 0;
+  concerts.forEach((c) => {
+    total++;
+    if (typeof c.lat === "number" && typeof c.lng === "number") {
+      located++;
+      const artists = Array.isArray(c.artists) ? c.artists : [];
+      window.L.marker([c.lat, c.lng], { icon: singlePinIcon() }).addTo(concertMapObj.layer)
+        .bindPopup(`<b>${esc(c.venueName || "Concert")}</b>${artists.length ? `<br>${esc(artists.join(", "))}` : ""}${c.date ? `<br><span style="color:#666">${esc(formatDate(c.date))}</span>` : ""}`);
+      coords.push([c.lat, c.lng]);
+    }
+  });
+  fitMarkers(concertMapObj.map, coords);
+  if (hint) hint.textContent = located
+    ? (located < total ? `Showing ${located} of ${total} concerts (others still geocoding).` : `Showing all ${located} concert venue(s).`)
+    : "No mapped venues yet — add an address to each concert.";
+  setTimeout(() => { try { concertMapObj && concertMapObj.map.invalidateSize(); } catch (_) {} }, 120);
+  geocodeConcertsPending();
+}
+
+let concertsGeocoding = false;
+async function geocodeConcertsPending() {
+  if (concertsGeocoding || !currentUser) return;
+  const concerts = loadConcerts();
+  const pending = concerts.filter((c) => c.address && c.lat == null);
+  if (!pending.length) return;
+  concertsGeocoding = true;
+  let changed = false;
+  for (const c of pending) {
+    await new Promise((r) => setTimeout(r, 1200));
+    const coords = (await nominatimSearch(`${c.venueName}, ${c.address}`)) || (await nominatimSearch(c.address));
+    if (coords) { c.lat = coords.lat; c.lng = coords.lng; changed = true; }
+  }
+  if (changed) {
+    saveConcerts(concerts);
+    if (activeTab === "concerts" && !concertActiveId && concertListView === "map") renderConcertsMap();
+  }
+  concertsGeocoding = false;
+}
+
+function submitConcert(form) {
+  const venue = (form.querySelector(".concert-venue-input")?.value || "").trim();
+  if (!venue) return;
+  const date = form.querySelector(".concert-date-input")?.value || "";
+  const address = (form.querySelector(".concert-addr-input")?.value || "").trim();
+  const now = new Date().toISOString();
+  const concerts = loadConcerts();
+  concerts.push({ id: uid4("conc"), venueName: venue, date, address, notes: "", rating: 0, artists: [], setlist: [], lat: null, lng: null, createdAt: now, updatedAt: now });
+  saveConcerts(concerts);
+  form.reset();
+  renderConcertList();
+}
+function saveConcertMeta(form) {
+  const concerts = loadConcerts();
+  const c = concerts.find((x) => x.id === concertActiveId);
+  if (!c) return;
+  const venue = (form.querySelector(".cm-venue")?.value || "").trim();
+  if (!venue) return;
+  const address = (form.querySelector(".cm-addr")?.value || "").trim();
+  const addrChanged = (c.address || "") !== address;
+  c.venueName = venue;
+  c.date = form.querySelector(".cm-date")?.value || "";
+  c.address = address;
+  c.notes = (form.querySelector(".cm-notes")?.value || "").trim();
+  if (addrChanged) { c.lat = null; c.lng = null; }
+  c.updatedAt = new Date().toISOString();
+  saveConcerts(concerts);
+  renderConcertDetail();
+}
+function addConcertArtist() {
+  const input = concertsRoot.querySelector(".concert-artist-input");
+  const v = (input?.value || "").trim();
+  if (!v) return;
+  const concerts = loadConcerts();
+  const c = concerts.find((x) => x.id === concertActiveId);
+  if (!c) return;
+  if (!Array.isArray(c.artists)) c.artists = [];
+  c.artists.push(v); c.updatedAt = new Date().toISOString();
+  saveConcerts(concerts);
+  const box = concertsRoot.querySelector(".concert-artists");
+  if (box) box.innerHTML = concertArtistsHTML(c);
+  if (input) { input.value = ""; input.focus(); }
+}
+function removeConcertArtist(idx) {
+  const concerts = loadConcerts();
+  const c = concerts.find((x) => x.id === concertActiveId);
+  if (!c || !Array.isArray(c.artists)) return;
+  c.artists.splice(idx, 1); c.updatedAt = new Date().toISOString();
+  saveConcerts(concerts);
+  const box = concertsRoot.querySelector(".concert-artists");
+  if (box) box.innerHTML = concertArtistsHTML(c);
+}
+function addConcertSong() {
+  const songInput = concertsRoot.querySelector(".concert-song-input");
+  const artistInput = concertsRoot.querySelector(".concert-song-artist");
+  const song = (songInput?.value || "").trim();
+  if (!song) return;
+  const artist = (artistInput?.value || "").trim();
+  const concerts = loadConcerts();
+  const c = concerts.find((x) => x.id === concertActiveId);
+  if (!c) return;
+  if (!Array.isArray(c.setlist)) c.setlist = [];
+  c.setlist.push({ song, artist }); c.updatedAt = new Date().toISOString();
+  saveConcerts(concerts);
+  const box = concertsRoot.querySelector(".concert-setlist");
+  if (box) box.innerHTML = concertSetlistHTML(c);
+  if (songInput) songInput.value = "";
+  if (artistInput) artistInput.value = "";
+  songInput?.focus();
+}
+function removeConcertSong(idx) {
+  const concerts = loadConcerts();
+  const c = concerts.find((x) => x.id === concertActiveId);
+  if (!c || !Array.isArray(c.setlist)) return;
+  c.setlist.splice(idx, 1); c.updatedAt = new Date().toISOString();
+  saveConcerts(concerts);
+  const box = concertsRoot.querySelector(".concert-setlist");
+  if (box) box.innerHTML = concertSetlistHTML(c);
+}
+function setConcertRating(val) {
+  const concerts = loadConcerts();
+  const c = concerts.find((x) => x.id === concertActiveId);
+  if (!c) return;
+  c.rating = val; c.updatedAt = new Date().toISOString();
+  saveConcerts(concerts);
+  const s = concertsRoot.querySelector(".star-input[data-rate='concert-rating']");
+  if (s) s.outerHTML = starInputHTML(c.rating, "concert-rating");
+}
+function deleteConcert(id) {
+  const c = getConcert(id);
+  if (!c) return;
+  if (!confirm(`Delete this concert${c.venueName ? ` at ${c.venueName}` : ""}?`)) return;
+  saveConcerts(loadConcerts().filter((x) => x.id !== id));
+  if (concertActiveId === id) concertActiveId = null;
+  renderConcertsTab();
+}
+function songsForConcert(c) {
+  const artists = Array.isArray(c.artists) ? c.artists : [];
+  const headliner = artists[0] || "";
+  return (Array.isArray(c.setlist) ? c.setlist : []).map((s) => ({ song: s.song, artist: s.artist || headliner }));
+}
+function exportConcertSetlist(id) {
+  const c = getConcert(id);
+  if (!c) return;
+  const songs = songsForConcert(c);
+  if (!songs.length) { alert("This setlist has no songs yet."); return; }
+  const name = `${c.venueName || "Concert"}${c.date ? ` — ${formatDate(c.date)}` : ""}`;
+  spotifyCreatePlaylistWithSongs(name, songs);
+}
+function exportAllSongs() {
+  const songs = [];
+  loadConcerts().forEach((c) => songsForConcert(c).forEach((s) => songs.push(s)));
+  if (!songs.length) { alert("No songs in any setlist yet."); return; }
+  spotifyCreatePlaylistWithSongs("lifelong — All Concert Songs", songs);
+}
+
+if (concertsRoot) {
+  concertsRoot.addEventListener("click", (e) => {
+    const starBtn = e.target.closest(".star-input[data-rate='concert-rating'] .star-btn");
+    if (starBtn) { setConcertRating(Number(starBtn.dataset.star) || 0); return; }
+    const a = e.target.closest("[data-action]");
+    if (!a) return;
+    switch (a.dataset.action) {
+      case "concert-listview": concertListView = a.dataset.view; renderConcertList(); break;
+      case "concert-open": concertActiveId = a.dataset.id; renderConcertDetail(); break;
+      case "concert-back": concertActiveId = null; renderConcertList(); break;
+      case "concert-delete": deleteConcert(a.dataset.id); break;
+      case "concert-artist-add": addConcertArtist(); break;
+      case "concert-artist-remove": removeConcertArtist(Number(a.dataset.idx)); break;
+      case "concert-song-add": addConcertSong(); break;
+      case "concert-song-remove": removeConcertSong(Number(a.dataset.idx)); break;
+      case "concert-export-set": exportConcertSetlist(a.dataset.id); break;
+      case "concert-export-all": exportAllSongs(); break;
+    }
+  });
+  concertsRoot.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    if (e.target.classList.contains("concert-artist-input")) { e.preventDefault(); addConcertArtist(); }
+    else if (e.target.classList.contains("concert-song-input") || e.target.classList.contains("concert-song-artist")) { e.preventDefault(); addConcertSong(); }
+  });
+  concertsRoot.addEventListener("submit", (e) => {
+    if (e.target.classList.contains("concert-add-form")) { e.preventDefault(); submitConcert(e.target); }
+    else if (e.target.classList.contains("concert-meta-form")) { e.preventDefault(); saveConcertMeta(e.target); }
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  Spotify export (Authorization Code + PKCE — no client secret needed)
+// ════════════════════════════════════════════════════════════════════════
+const SPOTIFY_SCOPES = "playlist-modify-public playlist-modify-private";
+function spotifyClientId() { return (window.LIFE_TRACKER_SPOTIFY_CLIENT_ID || "").trim(); }
+function spotifyRedirectUri() { return window.location.origin + window.location.pathname; }
+
+function b64url(buf) {
+  const arr = new Uint8Array(buf);
+  let s = "";
+  for (let i = 0; i < arr.length; i++) s += String.fromCharCode(arr[i]);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+async function sha256(str) { return crypto.subtle.digest("SHA-256", new TextEncoder().encode(str)); }
+function randomString(len) {
+  const arr = new Uint8Array(len);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, (b) => ("0" + (b & 0xff).toString(16)).slice(-2)).join("").slice(0, len);
+}
+function spotifyToken() { try { const raw = localStorage.getItem("spotify-token"); return raw ? JSON.parse(raw) : null; } catch (_) { return null; } }
+function setSpotifyToken(obj) { try { localStorage.setItem("spotify-token", JSON.stringify(obj)); } catch (_) {} }
+
+async function spotifyBeginAuth(pendingExport) {
+  const cid = spotifyClientId();
+  if (!cid) {
+    alert("Spotify isn't set up yet.\n\nAdd your Spotify Client ID to firebase-config.js as:\nwindow.LIFE_TRACKER_SPOTIFY_CLIENT_ID = \"your-id\";");
+    return;
+  }
+  const verifier = randomString(96);
+  const challenge = b64url(await sha256(verifier));
+  sessionStorage.setItem("spotify-verifier", verifier);
+  if (pendingExport) sessionStorage.setItem("spotify-pending", JSON.stringify(pendingExport));
+  const params = new URLSearchParams({
+    client_id: cid, response_type: "code", redirect_uri: spotifyRedirectUri(),
+    code_challenge_method: "S256", code_challenge: challenge, scope: SPOTIFY_SCOPES,
+  });
+  window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;
+}
+async function spotifyExchangeCode(code) {
+  const verifier = sessionStorage.getItem("spotify-verifier");
+  if (!verifier) return null;
+  const body = new URLSearchParams({
+    client_id: spotifyClientId(), grant_type: "authorization_code", code,
+    redirect_uri: spotifyRedirectUri(), code_verifier: verifier,
+  });
+  const res = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body,
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const tok = { accessToken: data.access_token, refreshToken: data.refresh_token, expiresAt: Date.now() + data.expires_in * 1000 };
+  setSpotifyToken(tok);
+  sessionStorage.removeItem("spotify-verifier");
+  return tok;
+}
+async function spotifyRefresh() {
+  const t = spotifyToken();
+  if (!t || !t.refreshToken) return null;
+  const body = new URLSearchParams({ client_id: spotifyClientId(), grant_type: "refresh_token", refresh_token: t.refreshToken });
+  const res = await fetch("https://accounts.spotify.com/api/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const tok = { accessToken: data.access_token, refreshToken: data.refresh_token || t.refreshToken, expiresAt: Date.now() + data.expires_in * 1000 };
+  setSpotifyToken(tok);
+  return tok;
+}
+async function spotifyValidToken() {
+  let t = spotifyToken();
+  if (!t) return null;
+  if (t.expiresAt && Date.now() >= t.expiresAt - 30000) t = await spotifyRefresh();
+  return t;
+}
+async function spotifyApi(path, opts, token) {
+  return fetch(`https://api.spotify.com/v1${path}`, {
+    ...opts,
+    headers: { Authorization: `Bearer ${token.accessToken}`, "Content-Type": "application/json", ...(opts && opts.headers) },
+  });
+}
+async function spotifySearchTrack(song, artist, token) {
+  const q = `track:${song}${artist ? ` artist:${artist}` : ""}`;
+  const res = await spotifyApi(`/search?type=track&limit=1&q=${encodeURIComponent(q)}`, {}, token);
+  if (!res.ok) return null;
+  const data = await res.json();
+  const item = data.tracks && data.tracks.items && data.tracks.items[0];
+  return item ? { uri: item.uri } : null;
+}
+async function spotifyCreatePlaylistWithSongs(name, songs) {
+  if (!spotifyClientId()) { await spotifyBeginAuth({ name, songs }); return; }
+  let token = await spotifyValidToken();
+  if (!token) { await spotifyBeginAuth({ name, songs }); return; }
+  try {
+    const meRes = await spotifyApi("/me", {}, token);
+    if (meRes.status === 401) { await spotifyBeginAuth({ name, songs }); return; }
+    if (!meRes.ok) throw new Error("Could not read Spotify profile");
+    const me = await meRes.json();
+    const createRes = await spotifyApi(`/users/${me.id}/playlists`, {
+      method: "POST", body: JSON.stringify({ name, description: "Created by lifelong", public: false }),
+    }, token);
+    if (!createRes.ok) throw new Error("Could not create playlist");
+    const playlist = await createRes.json();
+    const uris = [];
+    const missing = [];
+    for (const s of songs) {
+      const found = await spotifySearchTrack(s.song, s.artist, token);
+      if (found) uris.push(found.uri); else missing.push(s.song);
+    }
+    for (let i = 0; i < uris.length; i += 100) {
+      await spotifyApi(`/playlists/${playlist.id}/tracks`, { method: "POST", body: JSON.stringify({ uris: uris.slice(i, i + 100) }) }, token);
+    }
+    let msg = `✓ Created the playlist “${name}” with ${uris.length} song${uris.length !== 1 ? "s" : ""}.`;
+    if (missing.length) msg += `\n\nNot found on Spotify (${missing.length}): ${missing.slice(0, 12).join(", ")}${missing.length > 12 ? "…" : ""}`;
+    alert(msg);
+    if (playlist.external_urls && playlist.external_urls.spotify) window.open(playlist.external_urls.spotify, "_blank");
+  } catch (err) {
+    console.error("Spotify export failed:", err);
+    alert("Spotify export failed. Please try again.");
+  }
+}
+async function handleSpotifyRedirect() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("code");
+  if (!code || !sessionStorage.getItem("spotify-verifier")) return;
+  const token = await spotifyExchangeCode(code);
+  window.history.replaceState({}, document.title, window.location.origin + window.location.pathname);
+  const pendingRaw = sessionStorage.getItem("spotify-pending");
+  sessionStorage.removeItem("spotify-pending");
+  if (token && pendingRaw) {
+    try { const p = JSON.parse(pendingRaw); await spotifyCreatePlaylistWithSongs(p.name, p.songs); } catch (_) {}
+  } else if (token) {
+    alert("✓ Connected to Spotify. Tap export again to create your playlist.");
+  }
+}
+handleSpotifyRedirect();

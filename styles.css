@@ -120,6 +120,12 @@ ul { margin: 0; padding: 0; list-style: none; }
   line-height: 1.1;
   letter-spacing: -0.02em;
 }
+/* The "n" in lifelong is ghosted so the wordmark reads as "lifelog". */
+.brand-n {
+  color: var(--muted);
+  opacity: 0.28;
+  font-weight: 600;
+}
 .auth-brand-tagline {
   font-size: 0.82rem;
   color: var(--muted);
@@ -1143,3 +1149,159 @@ input:disabled { opacity: 0.45; }
   .lightbox-next { right: 6px; }
   .photos-grid { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); }
 }
+
+/* ════════════════════════════════════════════════════════
+   lifelong modules — Restaurants · Trips · Concerts
+   ════════════════════════════════════════════════════════ */
+
+/* Star ratings */
+.star-input { display: inline-flex; align-items: center; gap: 1px; }
+.star-btn {
+  background: none; border: none; cursor: pointer; padding: 0 1px;
+  font-size: 1.35rem; line-height: 1; color: var(--line);
+  transition: color 0.12s, transform 0.08s;
+}
+.star-btn:hover { transform: scale(1.12); }
+.star-btn.on { color: #f5a623; }
+.star-btn.star-clear { font-size: 1rem; color: var(--muted); margin-left: 6px; }
+.star-btn.star-clear.hidden { display: none; }
+.stars-static { display: inline-flex; gap: 1px; font-size: 0.95rem; color: var(--line); vertical-align: middle; }
+.stars-static .s.on { color: #f5a623; }
+.stars-static.none { color: var(--muted); font-size: 0.8rem; font-style: italic; }
+.rate-label { font-size: 0.85rem; font-weight: 600; color: var(--muted); margin-right: 6px; }
+
+/* Generic chips */
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; min-height: 4px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--brand-soft); color: var(--brand-strong);
+  border-radius: 999px; padding: 3px 10px; font-size: 0.82rem; font-weight: 600;
+}
+.chip-x {
+  background: none; border: none; cursor: pointer; color: var(--brand-strong);
+  opacity: 0.55; font-size: 0.95rem; line-height: 1; padding: 0;
+}
+.chip-x:hover { opacity: 1; }
+.muted-mini { color: var(--muted); font-size: 0.85rem; font-style: italic; }
+
+/* Shared module forms */
+.mod-form {
+  background: var(--surface-soft); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 14px; margin-bottom: 16px;
+  display: grid; gap: 10px;
+}
+.mod-form-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.mod-form-row > input, .mod-form-row > label { flex: 1 1 180px; }
+.mod-form input[type="text"], .mod-form input[type="date"], .mod-form input[type="time"], .mod-form textarea {
+  width: 100%; padding: 9px 11px; border: 1px solid var(--line);
+  border-radius: var(--radius-sm); font: inherit; background: var(--surface); color: var(--text);
+}
+.mod-form textarea { resize: vertical; }
+.mod-mini-label { display: flex; flex-direction: column; gap: 3px; font-size: 0.78rem; font-weight: 600; color: var(--muted); }
+.mod-rate-row { align-items: center; }
+.mod-form-actions { display: flex; gap: 8px; }
+.mod-inline-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.mod-inline-add input[type="text"] {
+  flex: 1 1 160px; padding: 8px 11px; border: 1px solid var(--line);
+  border-radius: var(--radius-sm); font: inherit; background: var(--surface); color: var(--text);
+}
+
+/* Section + detail headers */
+.mod-section-head, .mod-detail-head {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.mod-section-head h3, .mod-detail-title { font-family: "Sora", sans-serif; font-size: 1.1rem; margin: 0; }
+.mod-section-head-actions { margin-left: auto; display: flex; gap: 8px; }
+.mod-detail-title { flex: 1; }
+.mod-back { white-space: nowrap; }
+
+/* Lists + collapsible items */
+.mod-list { display: grid; gap: 10px; }
+.mod-item {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); overflow: hidden;
+}
+.mod-item-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 14px; cursor: pointer; list-style: none;
+}
+.mod-item-head::-webkit-details-marker { display: none; }
+.mod-item-head:hover { background: var(--surface-strong); }
+.mod-item-name { font-weight: 700; color: var(--text); }
+.mod-item-body { padding: 12px 14px 14px; display: grid; gap: 8px; border-top: 1px solid var(--line); }
+.mod-item-sub { margin: 0; font-size: 0.85rem; color: var(--muted); }
+.mod-item-notes { margin: 0; font-size: 0.9rem; color: var(--text); white-space: pre-wrap; }
+.mod-item-ordered { font-size: 0.85rem; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.mod-item-ordered .lbl { font-weight: 600; color: var(--muted); }
+.mod-item-ordered .chip { background: var(--surface-strong); color: var(--text); font-weight: 500; }
+.mod-item-actions { display: flex; gap: 8px; margin-top: 2px; }
+
+/* Restaurant category tabs */
+.rest-cat-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; align-items: center; }
+.rest-cat-tab {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+  padding: 7px 14px; font: inherit; font-weight: 600; font-size: 0.88rem; color: var(--muted); cursor: pointer;
+  transition: all 0.12s;
+}
+.rest-cat-tab:hover { color: var(--brand-strong); border-color: var(--brand); }
+.rest-cat-tab.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+.rest-cat-count {
+  display: inline-block; min-width: 18px; text-align: center; font-size: 0.72rem;
+  background: rgba(0,0,0,0.08); border-radius: 999px; padding: 0 6px; margin-left: 4px;
+}
+.rest-cat-tab.active .rest-cat-count { background: rgba(255,255,255,0.25); }
+.rest-cat-add-btn {
+  background: none; border: 1px dashed var(--line); border-radius: 999px;
+  padding: 7px 14px; font: inherit; font-size: 0.85rem; color: var(--muted); cursor: pointer;
+}
+.rest-cat-add-btn:hover { color: var(--brand-strong); border-color: var(--brand); }
+.rest-cat-form { margin-bottom: 14px; }
+
+/* Trip + concert cards */
+.trip-card {
+  display: flex; align-items: center; gap: 10px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 6px 12px 6px 6px;
+}
+.trip-card-main {
+  flex: 1; display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+  background: none; border: none; cursor: pointer; padding: 8px; text-align: left; border-radius: var(--radius-sm);
+}
+.trip-card-main:hover { background: var(--surface-strong); }
+.trip-card-name { font-weight: 700; color: var(--text); }
+.trip-card-meta { font-size: 0.83rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+
+/* Itinerary */
+.itinerary { display: grid; gap: 18px; }
+.itin-day-head {
+  font-family: "Sora", sans-serif; font-size: 0.95rem; margin: 0 0 8px;
+  color: var(--brand-strong); border-bottom: 2px solid var(--brand-soft); padding-bottom: 5px;
+}
+.itin-stop { display: flex; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.itin-stop:last-child { border-bottom: none; }
+.itin-time { flex: 0 0 72px; font-weight: 700; color: var(--brand-strong); font-size: 0.88rem; padding-top: 1px; }
+.itin-body { flex: 1; display: grid; gap: 3px; }
+.itin-name { font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 8px; }
+.itin-addr, .itin-notes { font-size: 0.84rem; color: var(--muted); }
+.itin-notes { white-space: pre-wrap; }
+
+/* Concerts detail */
+.concert-block {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 14px; margin-bottom: 14px;
+}
+.concert-block h4 { margin: 0 0 10px; font-family: "Sora", sans-serif; font-size: 1rem; }
+.concert-block-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.concert-block-head h4 { margin: 0; }
+.concert-song-add input { flex: 1 1 140px; }
+.concert-setlist { margin: 12px 0 0; padding-left: 22px; display: grid; gap: 6px; }
+.setlist-row { display: flex; align-items: center; gap: 8px; }
+.setlist-song { font-weight: 600; color: var(--text); }
+.setlist-artist { color: var(--muted); font-size: 0.85rem; }
+.setlist-row .chip-x { margin-left: auto; color: var(--muted); }
+
+/* Spotify button */
+.btn-spotify { background: #1db954; color: #fff; border-color: #1db954; }
+.btn-spotify:hover { background: #1aa34a; border-color: #1aa34a; }
+
+/* Map hint */
+.map-hint { font-size: 0.8rem; color: var(--muted); margin: 8px 2px 0; }

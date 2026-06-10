@@ -1,6 +1,6 @@
 {
-  "name": "Life Tracker",
-  "short_name": "Life Tracker",
+  "name": "lifelong",
+  "short_name": "lifelong",
   "description": "Log sporting events and map every stadium you've visited",
   "start_url": "/",
   "display": "standalone",

@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Life Tracker</title>
+  <title>lifelong</title>
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#009f94" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="Life Tracker" />
+  <meta name="apple-mobile-web-app-title" content="lifelong" />
   <link rel="apple-touch-icon" href="/icon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -29,7 +29,7 @@
           </svg>
         </div>
         <div class="auth-brand-text">
-          <span class="auth-brand-name">Life Tracker</span>
+          <span class="auth-brand-name">lifelo<span class="brand-n">n</span>g</span>
           <span class="auth-brand-tagline">Your games, your stadiums</span>
         </div>
       </div>
@@ -99,7 +99,7 @@
             <circle cx="256" cy="256" r="148" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="12"/>
             <polyline points="170,256 228,318 342,192" fill="none" stroke="#ffffff" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span class="app-header-name">Life Tracker</span>
+          <span class="app-header-name">lifelo<span class="brand-n">n</span>g</span>
         </div>
         <div class="app-header-right">
           <span id="user-label" class="user-label"></span>
@@ -113,6 +113,9 @@
         <button class="tab-btn" type="button" data-tab="scorers" role="tab" aria-selected="false">Scorers</button>
         <button class="tab-btn" type="button" data-tab="teams" role="tab" aria-selected="false">Teams</button>
         <button class="tab-btn" type="button" data-tab="photos" role="tab" aria-selected="false">Photos</button>
+        <button class="tab-btn" type="button" data-tab="restaurants" role="tab" aria-selected="false">Restaurants</button>
+        <button class="tab-btn" type="button" data-tab="trips" role="tab" aria-selected="false">Trips</button>
+        <button class="tab-btn" type="button" data-tab="concerts" role="tab" aria-selected="false">Concerts</button>
       </nav>
 
       <!-- Log Event tab -->
@@ -413,6 +416,33 @@
           <div id="teams-map" class="map-container"></div>
           <p id="teams-map-empty" class="empty-state" hidden>No stadium locations yet — locations appear automatically once events are geocoded.</p>
         </div>
+      </section>
+
+      <!-- Restaurants tab -->
+      <section id="tab-restaurants" class="panel" role="tabpanel" hidden>
+        <div class="panel-head">
+          <h2>Restaurants</h2>
+          <p class="muted">Organize places by category. Log what you ordered, jot notes, and rate each spot out of 5.</p>
+        </div>
+        <div id="restaurants-root"></div>
+      </section>
+
+      <!-- Trips tab -->
+      <section id="tab-trips" class="panel" role="tabpanel" hidden>
+        <div class="panel-head">
+          <h2>Trips</h2>
+          <p class="muted">Build a trip, add the places you went with notes and times, then view it as an itinerary or on a map.</p>
+        </div>
+        <div id="trips-root"></div>
+      </section>
+
+      <!-- Concerts tab -->
+      <section id="tab-concerts" class="panel" role="tabpanel" hidden>
+        <div class="panel-head">
+          <h2>Concerts</h2>
+          <p class="muted">Log shows and venues, track artists and setlists, and export setlists to Spotify.</p>
+        </div>
+        <div id="concerts-root"></div>
       </section>
 
     </div>
