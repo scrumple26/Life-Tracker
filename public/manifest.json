@@ -1,0 +1,17 @@
+{
+  "name": "lifelong",
+  "short_name": "lifelong",
+  "description": "A warm place to keep the games, trips, meals, and shows you've lived.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#faf5ec",
+  "theme_color": "#c2603d",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
