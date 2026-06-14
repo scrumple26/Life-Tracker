@@ -11,11 +11,7 @@ import { PhotosTab } from "./tabs/PhotosTab";
 import { ComingSoon } from "./tabs/ComingSoon";
 
 const TABS = [
-  { id: "log", label: "Log Event" },
-  { id: "stadiums", label: "Stadiums" },
-  { id: "scorers", label: "Scorers" },
-  { id: "teams", label: "Teams" },
-  { id: "photos", label: "Photos" },
+  { id: "sports", label: "Sports" },
   { id: "restaurants", label: "Restaurants" },
   { id: "trips", label: "Trips" },
   { id: "concerts", label: "Concerts" },
@@ -23,9 +19,20 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
+const SPORT_TABS = [
+  { id: "log", label: "Log Event" },
+  { id: "stadiums", label: "Stadiums" },
+  { id: "scorers", label: "Scorers" },
+  { id: "teams", label: "Teams" },
+  { id: "photos", label: "Photos" },
+] as const;
+
+type SportTabId = (typeof SPORT_TABS)[number]["id"];
+
 export function AppShell() {
   const { user, signOutUser } = useApp();
-  const [tab, setTab] = useState<TabId>("log");
+  const [tab, setTab] = useState<TabId>("sports");
+  const [sportTab, setSportTab] = useState<SportTabId>("log");
 
   return (
     <div className="min-h-dvh">
@@ -68,11 +75,36 @@ export function AppShell() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 sm:px-6 py-7 pb-24">
-        {tab === "log" && <LogEventTab />}
-        {tab === "stadiums" && <StadiumsTab />}
-        {tab === "scorers" && <ScorersTab />}
-        {tab === "teams" && <TeamsTab />}
-        {tab === "photos" && <PhotosTab />}
+        {tab === "sports" && (
+          <>
+            <div className="mb-6 flex justify-center sm:justify-start">
+              <div className="inline-flex flex-wrap gap-1 p-1 rounded-full bg-paper-2">
+                {SPORT_TABS.map((t) => {
+                  const active = t.id === sportTab;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => setSportTab(t.id)}
+                      className={`px-4 py-1.5 rounded-full text-sm font-semibold transition ${
+                        active
+                          ? "bg-card text-ink shadow-[var(--shadow-soft)]"
+                          : "text-ink-soft hover:text-ink"
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {sportTab === "log" && <LogEventTab />}
+            {sportTab === "stadiums" && <StadiumsTab />}
+            {sportTab === "scorers" && <ScorersTab />}
+            {sportTab === "teams" && <TeamsTab />}
+            {sportTab === "photos" && <PhotosTab />}
+          </>
+        )}
         {tab === "restaurants" && (
           <ComingSoon title="Restaurants" blurb="Places by category, with what you ordered and a rating." />
         )}
