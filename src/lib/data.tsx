@@ -21,7 +21,11 @@ import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import {
   EMPTY_USER_DATA,
+  type Concert,
+  type RestCategory,
+  type Restaurant,
   type SportEvent,
+  type Trip,
   type UserData,
 } from "./types";
 
@@ -60,6 +64,79 @@ function normalizeEvent(e: Record<string, unknown>): SportEvent {
   };
 }
 
+// ── Life-module normalizers (defensive: keep any existing fields) ────────
+const asStr = (v: unknown) => (typeof v === "string" ? v : "");
+const asDate = (v: unknown) => (typeof v === "string" && v ? v : null);
+const asNum = (v: unknown) => (typeof v === "number" ? v : null);
+const asRating = (v: unknown) =>
+  typeof v === "number" && v >= 0 && v <= 5 ? v : 0;
+const asStrArr = (v: unknown) =>
+  Array.isArray(v) ? v.filter((s): s is string => typeof s === "string") : [];
+
+function normalizeRestCategory(c: Record<string, unknown>): RestCategory {
+  return { id: String(c.id), name: asStr(c.name) };
+}
+
+function normalizeRestaurant(r: Record<string, unknown>): Restaurant {
+  return {
+    id: String(r.id),
+    name: asStr(r.name),
+    categoryId: asStr(r.categoryId),
+    cuisine: asStr(r.cuisine),
+    rating: asRating(r.rating),
+    city: asStr(r.city),
+    country: asStr(r.country),
+    dish: asStr(r.dish),
+    notes: asStr(r.notes),
+    date: asDate(r.date),
+    createdAt: asStr(r.createdAt) || new Date().toISOString(),
+  };
+}
+
+function normalizeTrip(t: Record<string, unknown>): Trip {
+  return {
+    id: String(t.id),
+    name: asStr(t.name),
+    city: asStr(t.city),
+    country: asStr(t.country),
+    startDate: asDate(t.startDate),
+    endDate: asDate(t.endDate),
+    rating: asRating(t.rating),
+    highlights: asStrArr(t.highlights),
+    notes: asStr(t.notes),
+    lat: asNum(t.lat),
+    lng: asNum(t.lng),
+    createdAt: asStr(t.createdAt) || new Date().toISOString(),
+  };
+}
+
+function normalizeConcert(c: Record<string, unknown>): Concert {
+  return {
+    id: String(c.id),
+    artist: asStr(c.artist),
+    venue: asStr(c.venue),
+    city: asStr(c.city),
+    date: asDate(c.date),
+    openingAct: asStr(c.openingAct),
+    setlist: asStrArr(c.setlist),
+    spotifyUrl: asStr(c.spotifyUrl),
+    rating: asRating(c.rating),
+    notes: asStr(c.notes),
+    createdAt: asStr(c.createdAt) || new Date().toISOString(),
+  };
+}
+
+function normalizeList<T>(
+  raw: unknown,
+  fn: (o: Record<string, unknown>) => T
+): T[] {
+  return Array.isArray(raw)
+    ? (raw as Record<string, unknown>[])
+        .filter((o) => o && o.id != null)
+        .map(fn)
+    : [];
+}
+
 function normalizeData(raw: Record<string, unknown> | undefined): UserData {
   if (!raw) return EMPTY_USER_DATA;
   return {
@@ -70,10 +147,10 @@ function normalizeData(raw: Record<string, unknown> | undefined): UserData {
       : [],
     scorerInfo: (raw.scorerInfo as UserData["scorerInfo"]) ?? {},
     teamLocs: (raw.teamLocs as UserData["teamLocs"]) ?? {},
-    restCategories: Array.isArray(raw.restCategories) ? raw.restCategories : [],
-    restaurants: Array.isArray(raw.restaurants) ? raw.restaurants : [],
-    trips: Array.isArray(raw.trips) ? raw.trips : [],
-    concerts: Array.isArray(raw.concerts) ? raw.concerts : [],
+    restCategories: normalizeList(raw.restCategories, normalizeRestCategory),
+    restaurants: normalizeList(raw.restaurants, normalizeRestaurant),
+    trips: normalizeList(raw.trips, normalizeTrip),
+    concerts: normalizeList(raw.concerts, normalizeConcert),
   };
 }
 

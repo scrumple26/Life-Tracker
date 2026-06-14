@@ -8,7 +8,9 @@ import { StadiumsTab } from "./tabs/StadiumsTab";
 import { ScorersTab } from "./tabs/ScorersTab";
 import { TeamsTab } from "./tabs/TeamsTab";
 import { PhotosTab } from "./tabs/PhotosTab";
-import { ComingSoon } from "./tabs/ComingSoon";
+import { RestaurantsTab } from "./tabs/RestaurantsTab";
+import { TripsTab } from "./tabs/TripsTab";
+import { ConcertsTab } from "./tabs/ConcertsTab";
 
 const TABS = [
   { id: "sports", label: "Sports" },
@@ -105,15 +107,9 @@ export function AppShell() {
             {sportTab === "photos" && <PhotosTab />}
           </>
         )}
-        {tab === "restaurants" && (
-          <ComingSoon title="Restaurants" blurb="Places by category, with what you ordered and a rating." />
-        )}
-        {tab === "trips" && (
-          <ComingSoon title="Trips" blurb="Build an itinerary and see it as a list or on a map." />
-        )}
-        {tab === "concerts" && (
-          <ComingSoon title="Concerts" blurb="Shows, setlists, and a Spotify export." />
-        )}
+        {tab === "restaurants" && <RestaurantsTab />}
+        {tab === "trips" && <TripsTab />}
+        {tab === "concerts" && <ConcertsTab />}
       </main>
     </div>
   );
