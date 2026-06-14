@@ -4,6 +4,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const date = searchParams.get("date");
   const team = searchParams.get("team")?.trim() || undefined;
+  const competition = searchParams.get("competition")?.trim() || undefined;
 
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return Response.json(
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const fixtures = await getFixturesByDate(date, team);
+    const fixtures = await getFixturesByDate(date, team, competition);
     return Response.json({ fixtures });
   } catch (err) {
     const status = err instanceof FootballError ? err.status : 500;

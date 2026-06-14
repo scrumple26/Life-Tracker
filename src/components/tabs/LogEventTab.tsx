@@ -73,6 +73,7 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
 
   // ── API-Football match finder ──
   const [teamQuery, setTeamQuery] = useState("");
+  const [compQuery, setCompQuery] = useState("");
   const [finding, setFinding] = useState(false);
   const [results, setResults] = useState<FixtureSummary[]>([]);
   const [finderMsg, setFinderMsg] = useState<string | null>(null);
@@ -90,6 +91,7 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
     try {
       const params = new URLSearchParams({ date });
       if (teamQuery.trim()) params.set("team", teamQuery.trim());
+      if (compQuery.trim()) params.set("competition", compQuery.trim());
       const res = await fetch(`/api/football/fixtures?${params.toString()}`);
       const data = await res.json();
       if (!res.ok) {
@@ -184,6 +186,7 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
     setHomeLineup([]);
     setAwayLineup([]);
     setTeamQuery("");
+    setCompQuery("");
     setResults([]);
     setFinderMsg(null);
     setEditingId(null);
@@ -395,6 +398,18 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
                 placeholder="Filter by team (optional)"
                 value={teamQuery}
                 onChange={(e) => setTeamQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    findMatches();
+                  }
+                }}
+              />
+              <input
+                className="field sm:flex-1"
+                placeholder="Filter by competition (optional)"
+                value={compQuery}
+                onChange={(e) => setCompQuery(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();

@@ -108,7 +108,8 @@ function toSummary(f: ApiFixture): FixtureSummary {
 
 export async function getFixturesByDate(
   date: string,
-  team?: string
+  team?: string,
+  competition?: string
 ): Promise<FixtureSummary[]> {
   const fixtures = await footballFetch<ApiFixture>(
     `/fixtures?date=${encodeURIComponent(date)}`
@@ -123,6 +124,13 @@ export async function getFixturesByDate(
     list = list.filter(
       (f) =>
         f.homeTeam.toLowerCase().includes(q) || f.awayTeam.toLowerCase().includes(q)
+    );
+  }
+  if (competition) {
+    const q = competition.toLowerCase();
+    list = list.filter(
+      (f) =>
+        f.league.toLowerCase().includes(q) || f.country.toLowerCase().includes(q)
     );
   }
   return list;
