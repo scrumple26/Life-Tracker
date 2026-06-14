@@ -61,7 +61,7 @@ export default function MapView({
     <MapContainer
       center={center}
       zoom={markers.length ? 5 : 2}
-      scrollWheelZoom={false}
+      scrollWheelZoom={true}
       className={`rounded-2xl border border-line overflow-hidden ${className}`}
       style={{ height: "100%", width: "100%" }}
     >
