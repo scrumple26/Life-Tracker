@@ -14,6 +14,7 @@ import {
 } from "@/lib/types";
 import type { FixtureSummary } from "@/lib/football-types";
 import { EventCard } from "../EventCard";
+import { TeamAutocomplete } from "../TeamAutocomplete";
 
 const SPORTS = Object.keys(SPORT_LABELS) as Sport[];
 
@@ -451,20 +452,18 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
         <div className="grid sm:grid-cols-2 gap-4">
           <div>
             <label className="field-label">Home team</label>
-            <input
-              className="field"
-              placeholder="e.g. Manchester United"
+            <TeamAutocomplete
               value={homeTeam}
-              onChange={(e) => setHomeTeam(e.target.value)}
+              onChange={setHomeTeam}
+              placeholder="e.g. Manchester United"
             />
           </div>
           <div>
             <label className="field-label">Away team</label>
-            <input
-              className="field"
-              placeholder="e.g. Liverpool"
+            <TeamAutocomplete
               value={awayTeam}
-              onChange={(e) => setAwayTeam(e.target.value)}
+              onChange={setAwayTeam}
+              placeholder="e.g. Liverpool"
             />
           </div>
           <div>

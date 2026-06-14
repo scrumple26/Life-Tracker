@@ -196,6 +196,29 @@ export interface PlayerBirth {
   dob: string;
 }
 
+interface ApiTeamSearch {
+  team: { id: number; name: string; country: string | null; logo: string | null };
+}
+
+export interface TeamSuggestion {
+  id: number;
+  name: string;
+  country: string;
+  logo: string;
+}
+
+export async function searchTeams(query: string): Promise<TeamSuggestion[]> {
+  const res = await footballFetch<ApiTeamSearch>(
+    `/teams?search=${encodeURIComponent(query)}`
+  );
+  return res.map((r) => ({
+    id: r.team.id,
+    name: r.team.name,
+    country: r.team.country ?? "",
+    logo: r.team.logo ?? "",
+  }));
+}
+
 function toBirth(p: ApiProfile["player"]): PlayerBirth {
   const place = p.birth?.place ?? "";
   const country = p.birth?.country ?? "";
