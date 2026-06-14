@@ -49,7 +49,8 @@ interface ApiEvent {
   type: string;
   detail: string;
   team: { id: number };
-  player: { id: number; name: string };
+  player: { id: number | null; name: string | null };
+  assist?: { id: number | null; name: string | null };
   time: { elapsed: number | null };
 }
 
@@ -147,24 +148,39 @@ export async function getFixtureDetails(
 
   const homeLineup: LineupEntry[] = [];
   const awayLineup: LineupEntry[] = [];
+  const homeStart = new Set<number>();
+  const awayStart = new Set<number>();
+
   for (const tl of lineups) {
-    const arr = tl.team.id === homeTeamId ? homeLineup : awayLineup;
+    const isHome = tl.team.id === homeTeamId;
+    const arr = isHome ? homeLineup : awayLineup;
+    const startSet = isHome ? homeStart : awayStart;
     for (const p of tl.startXI ?? []) {
       arr.push({ name: p.player.name, pos: p.player.pos ?? undefined, playerId: p.player.id });
+      startSet.add(p.player.id);
     }
-    for (const p of tl.substitutes ?? []) {
-      arr.push({
-        name: p.player.name,
-        pos: p.player.pos ?? undefined,
-        sub: true,
-        playerId: p.player.id,
-      });
+  }
+
+  // Add only players who actually came on (from substitution events) — anyone
+  // in a "subst" event who wasn't in the starting XI. Unused bench is ignored.
+  const seen = new Set<number>([...homeStart, ...awayStart]);
+  for (const ev of events) {
+    if (ev.type !== "subst") continue;
+    const isHome = ev.team.id === homeTeamId;
+    const arr = isHome ? homeLineup : awayLineup;
+    const startSet = isHome ? homeStart : awayStart;
+    for (const cand of [ev.player, ev.assist]) {
+      if (!cand?.id || !cand.name) continue;
+      if (startSet.has(cand.id) || seen.has(cand.id)) continue; // starter or already added
+      seen.add(cand.id);
+      arr.push({ name: cand.name, sub: true, playerId: cand.id });
     }
   }
 
   const scorers: Scorer[] = [];
   for (const ev of events) {
     if (ev.type !== "Goal" || ev.detail === "Missed Penalty") continue;
+    if (!ev.player?.name) continue;
     const isOwnGoal = ev.detail === "Own Goal";
     const isHome = ev.team.id === homeTeamId;
     // Own goals are credited to the opposing side.
@@ -179,7 +195,7 @@ export async function getFixtureDetails(
       name: ev.player.name,
       team,
       minute: ev.time.elapsed != null ? String(ev.time.elapsed) : undefined,
-      playerId: ev.player.id,
+      playerId: ev.player.id ?? undefined,
     });
   }
 
