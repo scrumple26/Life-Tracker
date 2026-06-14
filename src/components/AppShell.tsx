@@ -7,6 +7,7 @@ import { BrandMark, BrandName } from "./Brand";
 import { LogEventTab } from "./tabs/LogEventTab";
 import { StadiumsTab } from "./tabs/StadiumsTab";
 import { ScorersTab } from "./tabs/ScorersTab";
+import { PlayersTab } from "./tabs/PlayersTab";
 import { TeamsTab } from "./tabs/TeamsTab";
 import { PhotosTab } from "./tabs/PhotosTab";
 import { RestaurantsTab } from "./tabs/RestaurantsTab";
@@ -26,6 +27,7 @@ const SPORT_TABS = [
   { id: "log", label: "Log Event" },
   { id: "stadiums", label: "Stadiums" },
   { id: "scorers", label: "Scorers" },
+  { id: "players", label: "Players" },
   { id: "teams", label: "Teams" },
   { id: "photos", label: "Photos" },
 ] as const;
@@ -144,6 +146,7 @@ export function AppShell() {
             {sportTab === "log" && <LogEventTab sport={activeSport} />}
             {sportTab === "stadiums" && <StadiumsTab sport={activeSport} />}
             {sportTab === "scorers" && <ScorersTab sport={activeSport} />}
+            {sportTab === "players" && <PlayersTab sport={activeSport} />}
             {sportTab === "teams" && <TeamsTab sport={activeSport} />}
             {sportTab === "photos" && <PhotosTab sport={activeSport} />}
           </>

@@ -18,6 +18,7 @@ export interface Scorer {
   name: string;
   team: "home" | "away";
   minute?: string;
+  playerId?: number; // API-Football player id, when filled from the API
 }
 
 export interface Penalties {
@@ -29,6 +30,7 @@ export interface LineupEntry {
   name: string;
   pos?: string;
   sub?: boolean;
+  playerId?: number; // API-Football player id, when filled from the API
 }
 
 export interface SportEvent {
@@ -120,10 +122,23 @@ export interface Concert {
   createdAt: string;
 }
 
+// playerInfo: keyed by API-Football player id -> birth details (covers every
+// player seen in lineups, scorers included).
+export interface PlayerInfo {
+  name: string;
+  birthplace?: string;
+  country?: string;
+  nationality?: string;
+  dob?: string;
+  lat?: number;
+  lng?: number;
+}
+
 // The whole per-user document.
 export interface UserData {
   events: SportEvent[];
   scorerInfo: Record<string, ScorerInfo>;
+  playerInfo: Record<string, PlayerInfo>;
   teamLocs: Record<string, LatLng & { city?: string; state?: string; country?: string }>;
   restCategories: RestCategory[];
   restaurants: Restaurant[];
@@ -134,6 +149,7 @@ export interface UserData {
 export const EMPTY_USER_DATA: UserData = {
   events: [],
   scorerInfo: {},
+  playerInfo: {},
   teamLocs: {},
   restCategories: [],
   restaurants: [],

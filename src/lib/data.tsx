@@ -22,6 +22,7 @@ import { auth, db } from "./firebase";
 import {
   EMPTY_USER_DATA,
   type Concert,
+  type PlayerInfo,
   type RestCategory,
   type Restaurant,
   type SportEvent,
@@ -151,6 +152,24 @@ function normalizeScorerInfo(raw: unknown): UserData["scorerInfo"] {
   return out;
 }
 
+function normalizePlayerInfo(raw: unknown): UserData["playerInfo"] {
+  if (!raw || typeof raw !== "object") return {};
+  const out: UserData["playerInfo"] = {};
+  for (const [key, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!v || typeof v !== "object") continue;
+    const o = v as Record<string, unknown>;
+    const info: PlayerInfo = { name: asStr(o.name) };
+    if (asStr(o.birthplace)) info.birthplace = asStr(o.birthplace);
+    if (asStr(o.country)) info.country = asStr(o.country);
+    if (asStr(o.nationality)) info.nationality = asStr(o.nationality);
+    if (asStr(o.dob)) info.dob = asStr(o.dob);
+    if (asNum(o.lat) != null) info.lat = asNum(o.lat) as number;
+    if (asNum(o.lng) != null) info.lng = asNum(o.lng) as number;
+    out[key] = info;
+  }
+  return out;
+}
+
 function normalizeList<T>(
   raw: unknown,
   fn: (o: Record<string, unknown>) => T
@@ -171,6 +190,7 @@ function normalizeData(raw: Record<string, unknown> | undefined): UserData {
           .map(normalizeEvent)
       : [],
     scorerInfo: normalizeScorerInfo(raw.scorerInfo),
+    playerInfo: normalizePlayerInfo(raw.playerInfo),
     teamLocs: (raw.teamLocs as UserData["teamLocs"]) ?? {},
     restCategories: normalizeList(raw.restCategories, normalizeRestCategory),
     restaurants: normalizeList(raw.restaurants, normalizeRestaurant),

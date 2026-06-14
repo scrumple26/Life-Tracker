@@ -38,7 +38,7 @@ interface ApiFixture {
   goals: { home: number | null; away: number | null };
 }
 interface ApiPlayer {
-  player: { name: string; pos: string | null };
+  player: { id: number; name: string; pos: string | null };
 }
 interface ApiLineup {
   team: { id: number };
@@ -49,7 +49,7 @@ interface ApiEvent {
   type: string;
   detail: string;
   team: { id: number };
-  player: { name: string };
+  player: { id: number; name: string };
   time: { elapsed: number | null };
 }
 
@@ -142,10 +142,15 @@ export async function getFixtureDetails(
   for (const tl of lineups) {
     const arr = tl.team.id === homeTeamId ? homeLineup : awayLineup;
     for (const p of tl.startXI ?? []) {
-      arr.push({ name: p.player.name, pos: p.player.pos ?? undefined });
+      arr.push({ name: p.player.name, pos: p.player.pos ?? undefined, playerId: p.player.id });
     }
     for (const p of tl.substitutes ?? []) {
-      arr.push({ name: p.player.name, pos: p.player.pos ?? undefined, sub: true });
+      arr.push({
+        name: p.player.name,
+        pos: p.player.pos ?? undefined,
+        sub: true,
+        playerId: p.player.id,
+      });
     }
   }
 
@@ -166,8 +171,43 @@ export async function getFixtureDetails(
       name: ev.player.name,
       team,
       minute: ev.time.elapsed != null ? String(ev.time.elapsed) : undefined,
+      playerId: ev.player.id,
     });
   }
 
   return { homeLineup, awayLineup, scorers };
+}
+
+interface ApiProfile {
+  player: {
+    id: number;
+    name: string;
+    nationality: string | null;
+    birth: { date: string | null; place: string | null; country: string | null };
+  };
+}
+
+export interface PlayerBirth {
+  id: number;
+  name: string;
+  birthplace: string; // "place, country" (may be empty)
+  country: string;
+  nationality: string;
+  dob: string;
+}
+
+export async function getPlayerBirth(id: number): Promise<PlayerBirth | null> {
+  const res = await footballFetch<ApiProfile>(`/players/profiles?player=${id}`);
+  const p = res[0]?.player;
+  if (!p) return null;
+  const place = p.birth?.place ?? "";
+  const country = p.birth?.country ?? "";
+  return {
+    id: p.id,
+    name: p.name,
+    birthplace: [place, country].filter(Boolean).join(", "),
+    country,
+    nationality: p.nationality ?? "",
+    dob: p.birth?.date ?? "",
+  };
 }

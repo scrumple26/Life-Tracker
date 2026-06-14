@@ -5,11 +5,13 @@ import { useApp } from "@/lib/data";
 import { geocode } from "@/lib/geo";
 import type { ScorerInfo, Sport } from "@/lib/types";
 import { MapPanel, type MapMarker } from "../Map";
+import { FetchBirthplacesButton } from "../FetchBirthplacesButton";
 
 interface ScorerAgg {
   key: string;
   name: string;
   goals: number;
+  playerId?: number;
 }
 
 export function ScorersTab({ sport }: { sport?: Sport }) {
@@ -32,7 +34,9 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
         if (!name) continue;
         const key = name.toLowerCase();
         if (!byKey.has(key)) byKey.set(key, { key, name, goals: 0 });
-        byKey.get(key)!.goals += 1;
+        const agg = byKey.get(key)!;
+        agg.goals += 1;
+        if (agg.playerId == null && s.playerId != null) agg.playerId = s.playerId;
       }
     }
     const arr: ScorerAgg[] = Array.from(byKey.values());
@@ -40,25 +44,36 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
     return arr;
   }, [events]);
 
+  // Birthplace: prefer API player data (by id), fall back to manual scorerInfo.
+  const birthOf = (s: ScorerAgg) => {
+    const api = s.playerId != null ? data.playerInfo[String(s.playerId)] : undefined;
+    const manual = data.scorerInfo[s.key];
+    const lat = api?.lat ?? manual?.lat ?? null;
+    const lng = api?.lng ?? manual?.lng ?? null;
+    const birthplace = api?.birthplace ?? manual?.birthplace ?? "";
+    return { lat, lng, birthplace };
+  };
+
   const markers = useMemo<MapMarker[]>(() => {
     const out: MapMarker[] = [];
     for (const s of scorers) {
-      const info = data.scorerInfo[s.key];
-      if (info?.lat != null && info?.lng != null) {
+      const b = birthOf(s);
+      if (b.lat != null && b.lng != null) {
         out.push({
           id: s.key,
-          lat: info.lat,
-          lng: info.lng,
+          lat: b.lat,
+          lng: b.lng,
           title: s.name,
           lines: [
-            info.birthplace ?? "",
+            b.birthplace,
             `${s.goals} goal${s.goals === 1 ? "" : "s"} seen`,
           ].filter(Boolean),
         });
       }
     }
     return out;
-  }, [scorers, data.scorerInfo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scorers, data.scorerInfo, data.playerInfo]);
 
   async function saveBirthplace(key: string) {
     const place = draft.trim();
@@ -132,9 +147,16 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
           </button>
         </div>
         {scorers.length > 0 && (
-          <button className="btn btn-ghost btn-sm" onClick={exportCsv}>
-            Export CSV
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <FetchBirthplacesButton
+              players={scorers
+                .filter((s) => s.playerId != null)
+                .map((s) => ({ id: s.playerId as number, name: s.name }))}
+            />
+            <button className="btn btn-ghost btn-sm" onClick={exportCsv}>
+              Export CSV
+            </button>
+          </div>
         )}
       </div>
 
@@ -150,14 +172,15 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
         <ul className="grid gap-2.5">
           {scorers.map((s) => {
             const info = data.scorerInfo[s.key];
+            const birthplace = birthOf(s).birthplace;
             const isEditing = editing === s.key;
             return (
               <li key={s.key} className="card p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-medium text-ink truncate">{s.name}</p>
-                    {info?.birthplace && !isEditing && (
-                      <p className="text-xs text-muted">📍 {info.birthplace}</p>
+                    {birthplace && !isEditing && (
+                      <p className="text-xs text-muted">📍 {birthplace}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
