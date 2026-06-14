@@ -4,6 +4,10 @@ import { useState } from "react";
 import { useApp } from "@/lib/data";
 import { BrandMark, BrandName } from "./Brand";
 import { LogEventTab } from "./tabs/LogEventTab";
+import { StadiumsTab } from "./tabs/StadiumsTab";
+import { ScorersTab } from "./tabs/ScorersTab";
+import { TeamsTab } from "./tabs/TeamsTab";
+import { PhotosTab } from "./tabs/PhotosTab";
 import { ComingSoon } from "./tabs/ComingSoon";
 
 const TABS = [
@@ -65,18 +69,10 @@ export function AppShell() {
 
       <main className="mx-auto max-w-5xl px-4 sm:px-6 py-7 pb-24">
         {tab === "log" && <LogEventTab />}
-        {tab === "stadiums" && (
-          <ComingSoon title="Stadiums" blurb="Your venues on a warm map, with the games played at each." />
-        )}
-        {tab === "scorers" && (
-          <ComingSoon title="Scorers" blurb="Everyone you've watched score, plus a birthplace map." />
-        )}
-        {tab === "teams" && (
-          <ComingSoon title="Teams" blurb="Every team you've seen play, in a list and on a map." />
-        )}
-        {tab === "photos" && (
-          <ComingSoon title="Photos" blurb="Your match-day photos, grouped by year and venue." />
-        )}
+        {tab === "stadiums" && <StadiumsTab />}
+        {tab === "scorers" && <ScorersTab />}
+        {tab === "teams" && <TeamsTab />}
+        {tab === "photos" && <PhotosTab />}
         {tab === "restaurants" && (
           <ComingSoon title="Restaurants" blurb="Places by category, with what you ordered and a rating." />
         )}
