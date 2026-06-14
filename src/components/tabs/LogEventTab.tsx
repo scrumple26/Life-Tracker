@@ -7,10 +7,12 @@ import { newId, useApp } from "@/lib/data";
 import { geocode } from "@/lib/geo";
 import {
   SPORT_LABELS,
+  type LineupEntry,
   type Scorer,
   type Sport,
   type SportEvent,
 } from "@/lib/types";
+import type { FixtureSummary } from "@/lib/football-types";
 import { EventCard } from "../EventCard";
 
 const SPORTS = Object.keys(SPORT_LABELS) as Sport[];
@@ -57,11 +59,91 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
   const [scName, setScName] = useState("");
   const [scSide, setScSide] = useState<"home" | "away">("home");
   const [scMin, setScMin] = useState("");
+  const [homeLineup, setHomeLineup] = useState<LineupEntry[]>([]);
+  const [awayLineup, setAwayLineup] = useState<LineupEntry[]>([]);
 
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
+  // ── API-Football match finder ──
+  const [teamQuery, setTeamQuery] = useState("");
+  const [finding, setFinding] = useState(false);
+  const [results, setResults] = useState<FixtureSummary[]>([]);
+  const [finderMsg, setFinderMsg] = useState<string | null>(null);
+
   const isSoccer = sport === "soccer";
+
+  async function findMatches() {
+    if (dateUnknown || !date) {
+      setFinderMsg("Pick the date you attended first.");
+      return;
+    }
+    setFinding(true);
+    setFinderMsg("Searching…");
+    setResults([]);
+    try {
+      const params = new URLSearchParams({ date });
+      if (teamQuery.trim()) params.set("team", teamQuery.trim());
+      const res = await fetch(`/api/football/fixtures?${params.toString()}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setFinderMsg(data.error ?? "Something went wrong.");
+        return;
+      }
+      if (!data.fixtures.length) {
+        setFinderMsg("No matches found for that date" + (teamQuery ? " and team." : "."));
+        return;
+      }
+      setResults(data.fixtures as FixtureSummary[]);
+      setFinderMsg(
+        `${data.fixtures.length} match${data.fixtures.length !== 1 ? "es" : ""} — pick the one you went to`
+      );
+    } catch {
+      setFinderMsg("Network error reaching the football API.");
+    } finally {
+      setFinding(false);
+    }
+  }
+
+  async function fillFromFixture(f: FixtureSummary) {
+    setHomeTeam(f.homeTeam);
+    setAwayTeam(f.awayTeam);
+    if (f.homeScore != null) setHomeScore(String(f.homeScore));
+    if (f.awayScore != null) setAwayScore(String(f.awayScore));
+    if (f.venue) setStadium(f.venue);
+    if (f.city) setAddress(f.city);
+    if (f.league) setCompetition(f.league);
+    setResults([]);
+    setFinderMsg("Loading lineups & scorers…");
+    try {
+      const res = await fetch(
+        `/api/football/details?fixture=${f.id}&home=${f.homeTeamId}`
+      );
+      const d = await res.json();
+      if (res.ok) {
+        setHomeLineup(d.homeLineup ?? []);
+        setAwayLineup(d.awayLineup ?? []);
+        setScorers(d.scorers ?? []);
+        const players = (d.homeLineup?.length ?? 0) + (d.awayLineup?.length ?? 0);
+        setFinderMsg(
+          `✓ Filled from API · ${d.scorers?.length ?? 0} goal${
+            (d.scorers?.length ?? 0) === 1 ? "" : "s"
+          } · ${players} players`
+        );
+      } else {
+        setFinderMsg("✓ Basic info filled (lineups/scorers unavailable).");
+      }
+    } catch {
+      setFinderMsg("✓ Basic info filled (lineups/scorers unavailable).");
+    }
+  }
+
+  function clearAutofill() {
+    setHomeLineup([]);
+    setAwayLineup([]);
+    setScorers([]);
+    setFinderMsg(null);
+  }
 
   const previews = useMemo(
     () => photos.map((f) => ({ file: f, url: URL.createObjectURL(f) })),
@@ -93,6 +175,11 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
     setNotes("");
     setPhotos([]);
     setScorers([]);
+    setHomeLineup([]);
+    setAwayLineup([]);
+    setTeamQuery("");
+    setResults([]);
+    setFinderMsg(null);
   }
 
   async function submit(e: React.FormEvent) {
@@ -145,8 +232,8 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
           pensOn && (penHome !== "" || penAway !== "")
             ? { home: Number(penHome || 0), away: Number(penAway || 0) }
             : null,
-        homeLineup: [],
-        awayLineup: [],
+        homeLineup,
+        awayLineup,
         notes: notes.trim(),
         photos: photoUrls,
         lat,
@@ -250,6 +337,69 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
             </select>
           </div>
         </div>
+
+        {isSoccer && (
+          <div className="rounded-2xl border border-line bg-paper-2/60 p-4">
+            <span className="overline">Auto-fill from API-Football</span>
+            <p className="text-xs text-muted mt-1 mb-3">
+              Pick the date above, then find your match to fill teams, score,
+              venue, lineups, and scorers automatically.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                className="field sm:flex-1"
+                placeholder="Filter by team (optional)"
+                value={teamQuery}
+                onChange={(e) => setTeamQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    findMatches();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={finding}
+                onClick={findMatches}
+              >
+                {finding ? "Searching…" : "Find match"}
+              </button>
+            </div>
+            {finderMsg && <p className="text-xs text-ink-soft mt-2">{finderMsg}</p>}
+            {results.length > 0 && (
+              <ul className="mt-3 grid gap-1.5 max-h-80 overflow-auto">
+                {results.map((f) => (
+                  <li key={f.id}>
+                    <button
+                      type="button"
+                      onClick={() => fillFromFixture(f)}
+                      className="w-full text-left card p-3 hover:shadow-[var(--shadow-lift)] transition"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs text-muted truncate">
+                          {f.league} · {f.country}
+                        </span>
+                        <span className="text-xs text-muted shrink-0">
+                          {f.finished ? `${f.homeScore}–${f.awayScore}` : f.status}
+                        </span>
+                      </div>
+                      <div className="font-medium text-ink text-sm mt-0.5">
+                        {f.homeTeam} <span className="text-muted">vs</span> {f.awayTeam}
+                      </div>
+                      {f.venue && (
+                        <div className="text-xs text-muted mt-0.5">
+                          {[f.venue, f.city].filter(Boolean).join(", ")}
+                        </div>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         <div className="section-head mt-1">
           <span className="overline">The match</span>
@@ -420,6 +570,40 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {isSoccer && (homeLineup.length > 0 || awayLineup.length > 0) && (
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="field-label mb-0">Lineups (from API)</label>
+              <button
+                type="button"
+                className="text-xs text-muted hover:text-clay"
+                onClick={clearAutofill}
+              >
+                Clear auto-fill
+              </button>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4 mt-2">
+              {([["Home", homeLineup], ["Away", awayLineup]] as const).map(
+                ([label, lu]) => (
+                  <div key={label}>
+                    <p className="text-xs font-semibold text-ink-soft mb-1.5">
+                      {label} · {lu.length}
+                    </p>
+                    <ul className="flex flex-wrap gap-1.5">
+                      {lu.map((p, i) => (
+                        <li key={i} className={`chip ${p.sub ? "opacity-60" : ""}`}>
+                          {p.name}
+                          {p.pos ? ` · ${p.pos}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              )}
+            </div>
           </div>
         )}
 
