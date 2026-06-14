@@ -92,6 +92,14 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
       const params = new URLSearchParams({ date });
       if (teamQuery.trim()) params.set("team", teamQuery.trim());
       if (compQuery.trim()) params.set("competition", compQuery.trim());
+      // Search by the user's LOCAL date so late kickoffs (e.g. West-coast MLS)
+      // aren't pushed onto the next UTC day and missed.
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (tz) params.set("tz", tz);
+      } catch {
+        /* fall back to UTC */
+      }
       const res = await fetch(`/api/football/fixtures?${params.toString()}`);
       const data = await res.json();
       if (!res.ok) {

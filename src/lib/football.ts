@@ -110,10 +110,15 @@ function toSummary(f: ApiFixture): FixtureSummary {
 export async function getFixturesByDate(
   date: string,
   team?: string,
-  competition?: string
+  competition?: string,
+  timezone?: string
 ): Promise<FixtureSummary[]> {
+  // Pass the caller's timezone so `date` is the LOCAL calendar date. Without it
+  // API-Football filters by UTC, which drops late local kickoffs onto the next
+  // day (e.g. West-coast MLS games show under the following UTC date).
+  const tzParam = timezone ? `&timezone=${encodeURIComponent(timezone)}` : "";
   const fixtures = await footballFetch<ApiFixture>(
-    `/fixtures?date=${encodeURIComponent(date)}`
+    `/fixtures?date=${encodeURIComponent(date)}${tzParam}`
   );
   // Finished matches first, then prioritise the big leagues.
   const rank = (f: ApiFixture) =>
