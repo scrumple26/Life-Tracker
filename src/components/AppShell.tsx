@@ -62,7 +62,7 @@ export function AppShell() {
                   onClick={() => setTab(t.id)}
                   className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-semibold transition ${
                     active
-                      ? "bg-terracotta text-white shadow-[0_6px_14px_rgba(194,96,61,0.25)]"
+                      ? "bg-terracotta text-white shadow-[0_6px_14px_rgba(60,110,71,0.28)]"
                       : "text-ink-soft hover:bg-paper-2 hover:text-ink"
                   }`}
                 >

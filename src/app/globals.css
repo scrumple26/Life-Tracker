@@ -1,29 +1,31 @@
 @import "tailwindcss";
 
 /* ─────────────────────────────────────────────────────────────
-   lifelong — warm / cozy / modern design system
-   Paper-warm background, friendly serif display + clean sans body,
-   terracotta accent, soft rounded surfaces with gentle shadows.
+   lifelong — forest / cozy / modern design system
+   Warm-cream paper background with a green undertone, friendly serif
+   display + clean sans body, pine-green accent, soft rounded surfaces.
+   (The --color-terracotta* tokens now carry forest-green values so the
+   existing accent utilities — bg-terracotta, etc. — render green.)
    ───────────────────────────────────────────────────────────── */
 
 @theme {
   /* Surfaces */
-  --color-paper: #faf5ec;        /* app background — warm off-white */
-  --color-paper-2: #f2e9da;      /* sunken / subtle bands */
-  --color-card: #fffdf8;         /* raised cards */
-  --color-line: #e9dfcd;         /* hairline borders */
-  --color-line-strong: #dccdb4;
+  --color-paper: #f4f4e9;        /* app background — warm cream, green undertone */
+  --color-paper-2: #e8e9d6;      /* sunken / subtle bands */
+  --color-card: #fffef9;         /* raised cards */
+  --color-line: #e0e2cd;         /* hairline borders */
+  --color-line-strong: #cdd1b6;
 
   /* Ink / text */
-  --color-ink: #2f2823;          /* primary text — warm near-black */
-  --color-ink-soft: #6c6055;     /* secondary text */
-  --color-muted: #9a8d7b;        /* tertiary / hints */
+  --color-ink: #23302a;          /* primary text — deep forest near-black */
+  --color-ink-soft: #586056;     /* secondary text */
+  --color-muted: #899083;        /* tertiary / hints */
 
   /* Accents */
-  --color-terracotta: #c2603d;   /* primary accent */
-  --color-terracotta-dark: #a64d2d;
-  --color-terracotta-soft: #f6e3da;
-  --color-amber: #d99a4e;        /* warm secondary */
+  --color-terracotta: #3c6e47;   /* primary accent — pine green */
+  --color-terracotta-dark: #2c5436;
+  --color-terracotta-soft: #dde9dc;
+  --color-amber: #d99a4e;        /* warm secondary (logo pop) */
   --color-sage: #6f8f6a;         /* positive / wins */
   --color-sage-soft: #e6eee2;
   --color-clay: #b8503f;
@@ -52,10 +54,10 @@
     background-color: var(--color-paper);
     color: var(--color-ink);
     font-family: var(--font-sans);
-    /* warm wash + faint paper grain */
+    /* forest wash + faint paper grain */
     background-image:
-      radial-gradient(120% 80% at 50% -10%, rgba(217, 154, 78, 0.10), transparent 60%),
-      radial-gradient(rgba(120, 90, 50, 0.03) 1px, transparent 1px);
+      radial-gradient(120% 80% at 50% -10%, rgba(60, 110, 71, 0.12), transparent 60%),
+      radial-gradient(rgba(45, 84, 54, 0.035) 1px, transparent 1px);
     background-size: 100% 100%, 22px 22px;
     background-attachment: fixed, scroll;
   }
@@ -105,7 +107,7 @@
   .btn-primary {
     background-color: var(--color-terracotta);
     color: #fff;
-    box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 8px 18px rgba(194, 96, 61, 0.22);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 8px 18px rgba(60, 110, 71, 0.24);
   }
   .btn-primary:hover { background-color: var(--color-terracotta-dark); }
 

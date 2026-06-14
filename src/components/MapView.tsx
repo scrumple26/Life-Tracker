@@ -23,8 +23,8 @@ function pinIcon(count?: number) {
     className: "",
     html: `<div style="position:relative">
       <svg width="30" height="40" viewBox="0 0 30 40" xmlns="http://www.w3.org/2000/svg">
-        <path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 13.2 23.4 13.8 24a1.7 1.7 0 0 0 2.4 0C16.8 38.4 30 25.5 30 15 30 6.7 23.3 0 15 0z" fill="#c2603d"/>
-        <circle cx="15" cy="15" r="6" fill="#faf5ec"/>
+        <path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 13.2 23.4 13.8 24a1.7 1.7 0 0 0 2.4 0C16.8 38.4 30 25.5 30 15 30 6.7 23.3 0 15 0z" fill="#3c6e47"/>
+        <circle cx="15" cy="15" r="6" fill="#f4f4e9"/>
       </svg>${badge}
     </div>`,
     iconSize: [30, 40],
