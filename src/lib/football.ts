@@ -196,10 +196,7 @@ export interface PlayerBirth {
   dob: string;
 }
 
-export async function getPlayerBirth(id: number): Promise<PlayerBirth | null> {
-  const res = await footballFetch<ApiProfile>(`/players/profiles?player=${id}`);
-  const p = res[0]?.player;
-  if (!p) return null;
+function toBirth(p: ApiProfile["player"]): PlayerBirth {
   const place = p.birth?.place ?? "";
   const country = p.birth?.country ?? "";
   return {
@@ -210,4 +207,37 @@ export async function getPlayerBirth(id: number): Promise<PlayerBirth | null> {
     nationality: p.nationality ?? "",
     dob: p.birth?.date ?? "",
   };
+}
+
+export async function getPlayerBirth(id: number): Promise<PlayerBirth | null> {
+  const res = await footballFetch<ApiProfile>(`/players/profiles?player=${id}`);
+  const p = res[0]?.player;
+  return p ? toBirth(p) : null;
+}
+
+const norm = (s: string) =>
+  s.toLowerCase().replace(/\./g, " ").replace(/\s+/g, " ").trim();
+
+// Resolve a free-text player name (manual / legacy entries) to birth details.
+// API-Football's profiles search matches on last name, so we search the last
+// token and then pick the closest name match.
+export async function searchPlayerBirth(name: string): Promise<PlayerBirth | null> {
+  const cleaned = norm(name);
+  if (!cleaned) return null;
+  const parts = cleaned.split(" ");
+  const last = parts[parts.length - 1];
+  const term = last.length >= 3 ? last : cleaned;
+  if (term.length < 3) return null;
+
+  const res = await footballFetch<ApiProfile>(
+    `/players/profiles?search=${encodeURIComponent(term)}`
+  );
+  if (!res.length) return null;
+
+  const exact = res.find((r) => norm(r.player.name) === cleaned);
+  const byLast = res.find((r) => {
+    const cand = norm(r.player.name).split(" ");
+    return cand[cand.length - 1] === last;
+  });
+  return toBirth((exact ?? byLast ?? res[0]).player);
 }

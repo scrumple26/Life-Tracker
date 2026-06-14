@@ -19,9 +19,11 @@ function sideLabel(s: SportEvent["side"]) {
 
 export function EventCard({
   event,
+  onEdit,
   onDelete,
 }: {
   event: SportEvent;
+  onEdit?: (event: SportEvent) => void;
   onDelete?: (id: string) => void;
 }) {
   const e = event;
@@ -60,6 +62,16 @@ export function EventCard({
               </div>
             ) : (
               <span className="chip">Date unknown</span>
+            )}
+            {onEdit && (
+              <button
+                onClick={() => onEdit(e)}
+                className="opacity-0 group-hover:opacity-100 transition text-muted hover:text-terracotta text-xs"
+                aria-label="Edit event"
+                title="Edit event"
+              >
+                Edit
+              </button>
             )}
             {onDelete && (
               <button

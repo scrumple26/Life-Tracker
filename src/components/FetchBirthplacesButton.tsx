@@ -2,13 +2,18 @@
 
 import { useRef, useState } from "react";
 import { useApp } from "@/lib/data";
-import { fetchPlayerBirthplaces, type FetchProgress } from "@/lib/birthplaces";
+import {
+  fetchPlayerBirthplaces,
+  playerKey,
+  type FetchProgress,
+  type PlayerRef,
+} from "@/lib/birthplaces";
 
 export function FetchBirthplacesButton({
   players,
   label = "Fetch birthplaces",
 }: {
-  players: { id: number; name: string }[];
+  players: PlayerRef[];
   label?: string;
 }) {
   const { data, saveField } = useApp();
@@ -17,7 +22,8 @@ export function FetchBirthplacesButton({
   const abortRef = useRef<AbortController | null>(null);
 
   const missing = players.filter((p) => {
-    const cur = data.playerInfo[String(p.id)];
+    if (!p.name.trim()) return false;
+    const cur = data.playerInfo[playerKey(p)];
     return !cur || cur.lat == null || cur.lng == null;
   });
 

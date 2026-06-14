@@ -9,6 +9,16 @@ export interface FetchProgress {
   current?: string;
 }
 
+export interface PlayerRef {
+  id?: number; // API-Football id when known
+  name: string;
+}
+
+// Stable key for the playerInfo map: by id when we have one, else by name.
+export function playerKey(p: PlayerRef): string {
+  return p.id != null ? String(p.id) : `nm:${p.name.trim().toLowerCase()}`;
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
@@ -18,7 +28,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * survives interruption.
  */
 export async function fetchPlayerBirthplaces(
-  players: { id: number; name: string }[],
+  players: PlayerRef[],
   existing: Record<string, PlayerInfo>,
   opts: {
     onProgress?: (p: FetchProgress) => void;
@@ -29,9 +39,14 @@ export async function fetchPlayerBirthplaces(
   const { onProgress, onBatch, signal } = opts;
   const result: Record<string, PlayerInfo> = { ...existing };
 
-  // Only process players we don't already have coordinates for.
+  // Dedupe by key, and only process players we don't already have coords for.
+  const seen = new Set<string>();
   const todo = players.filter((p) => {
-    const cur = result[String(p.id)];
+    if (!p.name.trim()) return false;
+    const key = playerKey(p);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    const cur = result[key];
     return !cur || cur.lat == null || cur.lng == null;
   });
 
@@ -41,10 +56,15 @@ export async function fetchPlayerBirthplaces(
   for (let i = 0; i < todo.length; i++) {
     if (signal?.aborted) break;
     const p = todo[i];
+    const key = playerKey(p);
     onProgress?.({ done: i, total: todo.length, current: p.name });
 
     try {
-      const res = await fetch(`/api/football/player?id=${p.id}`);
+      const url =
+        p.id != null
+          ? `/api/football/player?id=${p.id}`
+          : `/api/football/player-search?name=${encodeURIComponent(p.name)}`;
+      const res = await fetch(url);
       if (res.ok) {
         const b = (await res.json()) as {
           name: string;
@@ -71,7 +91,7 @@ export async function fetchPlayerBirthplaces(
             info.lng = coords.lng;
           }
         }
-        result[String(p.id)] = info;
+        result[key] = info;
       }
     } catch {
       // skip this player; continue

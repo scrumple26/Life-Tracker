@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "@/lib/firebase";
 import { newId, useApp } from "@/lib/data";
@@ -64,6 +64,11 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
 
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+
+  // ── editing an existing event ──
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
+  const formRef = useRef<HTMLFormElement>(null);
 
   // ── API-Football match finder ──
   const [teamQuery, setTeamQuery] = useState("");
@@ -180,13 +185,44 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
     setTeamQuery("");
     setResults([]);
     setFinderMsg(null);
+    setEditingId(null);
+    setExistingPhotos([]);
+  }
+
+  function loadEventIntoForm(ev: SportEvent) {
+    setEditingId(ev.id);
+    setDate(ev.date ?? todayISO());
+    setDateUnknown(ev.date == null);
+    setSport(ev.sport);
+    setSide(ev.side);
+    setHomeTeam(ev.homeTeam);
+    setAwayTeam(ev.awayTeam);
+    setHomeScore(ev.homeScore != null ? String(ev.homeScore) : "");
+    setAwayScore(ev.awayScore != null ? String(ev.awayScore) : "");
+    setCompetition(ev.competition);
+    setPensOn(ev.penalties != null);
+    setPenHome(ev.penalties ? String(ev.penalties.home) : "");
+    setPenAway(ev.penalties ? String(ev.penalties.away) : "");
+    setStadium(ev.stadium);
+    setAddress(ev.address);
+    setNotes(ev.notes);
+    setScorers(ev.scorers);
+    setHomeLineup(ev.homeLineup);
+    setAwayLineup(ev.awayLineup);
+    setExistingPhotos(ev.photos);
+    setPhotos([]);
+    setResults([]);
+    setFinderMsg(null);
+    setStatus(null);
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (busy) return;
     setBusy(true);
-    const id = newId();
+    const isEdit = editingId != null;
+    const id = editingId ?? newId();
     try {
       // Upload photos (best-effort, in parallel)
       let photoUrls: string[] = [];
@@ -215,6 +251,8 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
         }
       }
 
+      const existing = isEdit ? data.events.find((ev) => ev.id === id) : undefined;
+
       const event: SportEvent = {
         id,
         date: dateUnknown ? null : date || null,
@@ -235,16 +273,19 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
         homeLineup,
         awayLineup,
         notes: notes.trim(),
-        photos: photoUrls,
+        photos: [...existingPhotos, ...photoUrls],
         lat,
         lng,
-        createdAt: new Date().toISOString(),
+        createdAt: existing?.createdAt ?? new Date().toISOString(),
       };
 
-      setStatus("Saving…");
-      await saveEvents([event, ...data.events]);
+      setStatus(isEdit ? "Updating…" : "Saving…");
+      const next = isEdit
+        ? data.events.map((ev) => (ev.id === id ? event : ev))
+        : [event, ...data.events];
+      await saveEvents(next);
       resetForm();
-      setStatus("Saved! 🎉");
+      setStatus(isEdit ? "Updated! 🎉" : "Saved! 🎉");
       setTimeout(() => setStatus(null), 2500);
     } catch (err) {
       setStatus((err as Error)?.message ?? "Something went wrong saving the event.");
@@ -283,13 +324,15 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
   return (
     <section className="lf-rise">
       <h2 className="text-4xl sm:text-5xl text-ink mb-2 tracking-tight">
-        Log a sporting event
+        {editingId ? "Edit event" : "Log a sporting event"}
       </h2>
       <p className="text-ink-soft mb-6 text-[15px]">
-        Record a game you were at — the score, the venue, who scored, a few photos.
+        {editingId
+          ? "Update the details below, then save your changes."
+          : "Record a game you were at — the score, the venue, who scored, a few photos."}
       </p>
 
-      <form onSubmit={submit} className="card p-5 sm:p-7 flex flex-col gap-5">
+      <form ref={formRef} onSubmit={submit} className="card p-5 sm:p-7 flex flex-col gap-5">
         <div className="section-head">
           <span className="overline">Basics</span>
         </div>
@@ -625,6 +668,24 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
         <div>
           <label className="field-label">Photos</label>
           <div className="flex flex-wrap gap-2 items-center">
+            {existingPhotos.map((src, i) => (
+              <div key={`ex-${i}`} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={src}
+                  alt=""
+                  className="h-20 w-20 object-cover rounded-xl border border-line"
+                />
+                <button
+                  type="button"
+                  onClick={() => setExistingPhotos((arr) => arr.filter((_, j) => j !== i))}
+                  className="absolute -top-2 -right-2 bg-card border border-line rounded-full w-6 h-6 text-sm text-clay shadow-[var(--shadow-soft)]"
+                  aria-label="Remove photo"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
             {previews.map((p, i) => (
               <div key={i} className="relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -662,8 +723,13 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
 
         <div className="flex items-center gap-3 pt-1">
           <button type="submit" className="btn btn-primary" disabled={busy}>
-            {busy ? "Saving…" : "Log Event"}
+            {busy ? "Saving…" : editingId ? "Update event" : "Log Event"}
           </button>
+          {editingId && (
+            <button type="button" className="btn btn-ghost" onClick={resetForm} disabled={busy}>
+              Cancel edit
+            </button>
+          )}
           {status && <span className="text-sm text-ink-soft">{status}</span>}
         </div>
       </form>
@@ -692,7 +758,12 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
                 </div>
                 <div className="grid gap-3">
                   {events.map((e) => (
-                    <EventCard key={e.id} event={e} onDelete={deleteEvent} />
+                    <EventCard
+                      key={e.id}
+                      event={e}
+                      onEdit={loadEventIntoForm}
+                      onDelete={deleteEvent}
+                    />
                   ))}
                 </div>
               </div>

@@ -5,9 +5,11 @@ import { useApp } from "@/lib/data";
 import type { Sport } from "@/lib/types";
 import { MapPanel, type MapMarker } from "../Map";
 import { FetchBirthplacesButton } from "../FetchBirthplacesButton";
+import { playerKey } from "@/lib/birthplaces";
 
 interface PlayerAgg {
-  id: number;
+  key: string;
+  id?: number;
   name: string;
   games: number;
 }
@@ -21,16 +23,18 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
     const evts = data.events.filter(
       (e) => e.sport === "soccer" && (!sport || e.sport === sport)
     );
-    const byId = new Map<number, PlayerAgg>();
+    const byKey = new Map<string, PlayerAgg>();
     for (const e of evts) {
       for (const p of [...e.homeLineup, ...e.awayLineup]) {
-        if (p.playerId == null) continue;
-        const cur = byId.get(p.playerId);
+        const name = p.name?.trim();
+        if (!name) continue;
+        const key = playerKey({ id: p.playerId, name });
+        const cur = byKey.get(key);
         if (cur) cur.games += 1;
-        else byId.set(p.playerId, { id: p.playerId, name: p.name, games: 1 });
+        else byKey.set(key, { key, id: p.playerId, name, games: 1 });
       }
     }
-    return [...byId.values()].sort(
+    return [...byKey.values()].sort(
       (a, b) => b.games - a.games || a.name.localeCompare(b.name)
     );
   }, [data.events, sport]);
@@ -38,7 +42,7 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
   const markers = useMemo<MapMarker[]>(() => {
     const byCoord = new Map<string, MapMarker>();
     for (const pl of players) {
-      const info = data.playerInfo[String(pl.id)];
+      const info = data.playerInfo[pl.key];
       if (info?.lat == null || info?.lng == null) continue;
       const key = `${info.lat.toFixed(4)},${info.lng.toFixed(4)}`;
       if (!byCoord.has(key)) {
@@ -56,7 +60,7 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
   }, [players, data.playerInfo]);
 
   const located = useMemo(
-    () => players.filter((p) => data.playerInfo[String(p.id)]?.lat != null).length,
+    () => players.filter((p) => data.playerInfo[p.key]?.lat != null).length,
     [players, data.playerInfo]
   );
 
@@ -118,9 +122,9 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
           ) : (
             <ul className="grid gap-2 sm:grid-cols-2">
               {players.map((p) => {
-                const info = data.playerInfo[String(p.id)];
+                const info = data.playerInfo[p.key];
                 return (
-                  <li key={p.id} className="card p-3 flex items-center justify-between gap-3">
+                  <li key={p.key} className="card p-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-medium text-ink truncate">{p.name}</p>
                       {info?.birthplace && (

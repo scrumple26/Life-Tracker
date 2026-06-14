@@ -6,6 +6,7 @@ import { geocode } from "@/lib/geo";
 import type { ScorerInfo, Sport } from "@/lib/types";
 import { MapPanel, type MapMarker } from "../Map";
 import { FetchBirthplacesButton } from "../FetchBirthplacesButton";
+import { playerKey } from "@/lib/birthplaces";
 
 interface ScorerAgg {
   key: string;
@@ -46,7 +47,7 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
 
   // Birthplace: prefer API player data (by id), fall back to manual scorerInfo.
   const birthOf = (s: ScorerAgg) => {
-    const api = s.playerId != null ? data.playerInfo[String(s.playerId)] : undefined;
+    const api = data.playerInfo[playerKey({ id: s.playerId, name: s.name })];
     const manual = data.scorerInfo[s.key];
     const lat = api?.lat ?? manual?.lat ?? null;
     const lng = api?.lng ?? manual?.lng ?? null;
@@ -149,9 +150,7 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
         {scorers.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
             <FetchBirthplacesButton
-              players={scorers
-                .filter((s) => s.playerId != null)
-                .map((s) => ({ id: s.playerId as number, name: s.name }))}
+              players={scorers.map((s) => ({ id: s.playerId, name: s.name }))}
             />
             <button className="btn btn-ghost btn-sm" onClick={exportCsv}>
               Export CSV
