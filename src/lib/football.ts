@@ -215,17 +215,25 @@ export async function getPlayerBirth(id: number): Promise<PlayerBirth | null> {
   return p ? toBirth(p) : null;
 }
 
+// Lowercase, fold accents, drop dots, collapse whitespace.
 const norm = (s: string) =>
-  s.toLowerCase().replace(/\./g, " ").replace(/\s+/g, " ").trim();
+  s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\./g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 // Resolve a free-text player name (manual / legacy entries) to birth details.
-// API-Football's profiles search matches on last name, so we search the last
-// token and then pick the closest name match.
+// API-Football's profiles search matches on last name and returns names as
+// "F. Lastname", so we search the last token then rank by first-name match.
 export async function searchPlayerBirth(name: string): Promise<PlayerBirth | null> {
   const cleaned = norm(name);
   if (!cleaned) return null;
   const parts = cleaned.split(" ");
   const last = parts[parts.length - 1];
+  const first = parts.length > 1 ? parts[0] : "";
   const term = last.length >= 3 ? last : cleaned;
   if (term.length < 3) return null;
 
@@ -234,10 +242,26 @@ export async function searchPlayerBirth(name: string): Promise<PlayerBirth | nul
   );
   if (!res.length) return null;
 
-  const exact = res.find((r) => norm(r.player.name) === cleaned);
-  const byLast = res.find((r) => {
-    const cand = norm(r.player.name).split(" ");
-    return cand[cand.length - 1] === last;
+  // Prefer players whose last name actually matches.
+  const byLast = res.filter((r) => {
+    const t = norm(r.player.name).split(" ");
+    return t[t.length - 1] === last;
   });
-  return toBirth((exact ?? byLast ?? res[0]).player);
+  const pool = byLast.length ? byLast : res;
+
+  // Rank by first-name / first-initial match when we have a first name.
+  let best = pool[0];
+  if (first) {
+    let bestScore = -1;
+    for (const r of pool) {
+      const apiFirst = norm(r.player.name).split(" ")[0] ?? "";
+      const score =
+        apiFirst === first ? 2 : apiFirst[0] && apiFirst[0] === first[0] ? 1 : 0;
+      if (score > bestScore) {
+        bestScore = score;
+        best = r;
+      }
+    }
+  }
+  return toBirth(best.player);
 }
