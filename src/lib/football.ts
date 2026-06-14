@@ -5,8 +5,8 @@ import "server-only";
 import type { LineupEntry, Scorer } from "./types";
 import type { FixtureDetails, FixtureSummary } from "./football-types";
 
-const BASE = "https://api-football-v1.p.rapidapi.com/v3";
-const HOST = "api-football-v1.p.rapidapi.com";
+// Direct API-Sports access (dashboard.api-football.com).
+const BASE = "https://v3.football.api-sports.io";
 
 // Leagues sorted to the top of results (EPL, La Liga, Bundesliga, Serie A,
 // Ligue 1, UCL, UEL, MLS, World Cup, Euros, Champ, FA Cup, Copa Lib).
@@ -64,7 +64,7 @@ async function footballFetch<T>(path: string): Promise<T[]> {
   let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
-      headers: { "x-rapidapi-key": key, "x-rapidapi-host": HOST },
+      headers: { "x-apisports-key": key },
     });
   } catch {
     throw new FootballError("Could not reach the football API.", 502);
@@ -72,7 +72,18 @@ async function footballFetch<T>(path: string): Promise<T[]> {
   if (!res.ok) {
     throw new FootballError(`Football API error (${res.status}).`, 502);
   }
-  const data = (await res.json()) as { response?: T[] };
+  const data = (await res.json()) as { response?: T[]; errors?: unknown };
+  // API-Sports returns 200 with a populated `errors` object on bad key /
+  // rate limit / plan issues.
+  const errs = data.errors;
+  const errMsgs = Array.isArray(errs)
+    ? (errs as unknown[]).map(String)
+    : errs && typeof errs === "object"
+      ? Object.values(errs as Record<string, string>)
+      : [];
+  if (errMsgs.length > 0) {
+    throw new FootballError(`Football API: ${errMsgs.join("; ")}`, 502);
+  }
   return data.response ?? [];
 }
 
