@@ -3,7 +3,8 @@
 import { useEffect } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from "react-leaflet";
+import type { GeoCollection } from "@/lib/geojson";
 
 export interface MapMarker {
   id: string;
@@ -47,11 +48,21 @@ function FitBounds({ markers }: { markers: MapMarker[] }) {
   return null;
 }
 
+const HIGHLIGHT_STYLE = {
+  fillColor: "#5bb8f5",
+  fillOpacity: 0.35,
+  color: "#2a81cb",
+  weight: 1.2,
+  opacity: 0.7,
+};
+
 export default function MapView({
   markers,
+  overlays,
   className = "",
 }: {
   markers: MapMarker[];
+  overlays?: GeoCollection[];
   className?: string;
 }) {
   const center: [number, number] = markers.length
@@ -69,6 +80,14 @@ export default function MapView({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
         url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
       />
+      {overlays?.map((fc) => (
+        <GeoJSON
+          key={fc.features.map((f) => f.properties.name).join("|")}
+          data={fc}
+          style={HIGHLIGHT_STYLE}
+          interactive={false}
+        />
+      ))}
       {markers.map((m, i) => (
         <Marker
           key={m.id}

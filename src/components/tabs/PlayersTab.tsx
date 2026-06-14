@@ -3,9 +3,11 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/lib/data";
 import type { Sport } from "@/lib/types";
-import { MapPanel, type MapMarker } from "../Map";
+import { type MapMarker } from "../Map";
+import { BirthplaceMap, type GeoPoint } from "../BirthplaceMap";
 import { FetchBirthplacesButton } from "../FetchBirthplacesButton";
 import { playerKey } from "@/lib/birthplaces";
+import { loadStates, useGeo, withUsState } from "@/lib/geojson";
 
 interface PlayerAgg {
   key: string;
@@ -17,6 +19,7 @@ interface PlayerAgg {
 export function PlayersTab({ sport }: { sport?: Sport }) {
   const { data } = useApp();
   const [view, setView] = useState<"map" | "list">("map");
+  const states = useGeo(loadStates, true); // for "City, State, USA" labels
 
   // Players come from soccer lineups (the only sport with lineup data).
   const players = useMemo<PlayerAgg[]>(() => {
@@ -50,13 +53,23 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
           id: key,
           lat: info.lat,
           lng: info.lng,
-          title: info.birthplace || pl.name,
+          title: withUsState(info.birthplace, info.lat, info.lng, states) || pl.name,
           lines: [],
         });
       }
       byCoord.get(key)!.lines!.push(pl.name);
     }
     return Array.from(byCoord.values());
+  }, [players, data.playerInfo, states]);
+
+  const points = useMemo<GeoPoint[]>(() => {
+    const out: GeoPoint[] = [];
+    for (const pl of players) {
+      const info = data.playerInfo[pl.key];
+      if (info?.lat == null || info?.lng == null) continue;
+      out.push({ lat: info.lat, lng: info.lng, country: info.country });
+    }
+    return out;
   }, [players, data.playerInfo]);
 
   const located = useMemo(
@@ -107,9 +120,7 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
 
           {view === "map" ? (
             markers.length > 0 ? (
-              <div className="card p-3 sm:p-4">
-                <MapPanel markers={markers} />
-              </div>
+              <BirthplaceMap markers={markers} points={points} />
             ) : (
               <div className="card p-10 text-center">
                 <div className="text-3xl mb-2">🌍</div>
@@ -128,7 +139,9 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
                     <div className="min-w-0">
                       <p className="font-medium text-ink truncate">{p.name}</p>
                       {info?.birthplace && (
-                        <p className="text-xs text-muted truncate">📍 {info.birthplace}</p>
+                        <p className="text-xs text-muted truncate">
+                          📍 {withUsState(info.birthplace, info.lat, info.lng, states)}
+                        </p>
                       )}
                     </div>
                     <span className="chip shrink-0">

@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import type { MapMarker } from "./MapView";
+import type { GeoCollection } from "@/lib/geojson";
 
 const MapView = dynamic(() => import("./MapView"), {
   ssr: false,
@@ -14,14 +15,16 @@ const MapView = dynamic(() => import("./MapView"), {
 
 export function MapPanel({
   markers,
+  overlays,
   className = "h-[420px]",
 }: {
   markers: MapMarker[];
+  overlays?: GeoCollection[];
   className?: string;
 }) {
   return (
     <div className={className}>
-      <MapView markers={markers} />
+      <MapView markers={markers} overlays={overlays} />
     </div>
   );
 }

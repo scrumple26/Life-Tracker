@@ -4,9 +4,11 @@ import { useMemo, useState } from "react";
 import { useApp } from "@/lib/data";
 import { geocode } from "@/lib/geo";
 import type { ScorerInfo, Sport } from "@/lib/types";
-import { MapPanel, type MapMarker } from "../Map";
+import { type MapMarker } from "../Map";
+import { BirthplaceMap, type GeoPoint } from "../BirthplaceMap";
 import { FetchBirthplacesButton } from "../FetchBirthplacesButton";
 import { playerKey } from "@/lib/birthplaces";
+import { loadStates, useGeo, withUsState } from "@/lib/geojson";
 
 interface ScorerAgg {
   key: string;
@@ -21,6 +23,7 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const states = useGeo(loadStates, true);
 
   const events = useMemo(
     () => (sport ? data.events.filter((e) => e.sport === sport) : data.events),
@@ -52,7 +55,8 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
     const lat = api?.lat ?? manual?.lat ?? null;
     const lng = api?.lng ?? manual?.lng ?? null;
     const birthplace = api?.birthplace ?? manual?.birthplace ?? "";
-    return { lat, lng, birthplace };
+    const country = api?.country ?? manual?.country ?? "";
+    return { lat, lng, birthplace, country };
   };
 
   const markers = useMemo<MapMarker[]>(() => {
@@ -66,11 +70,21 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
           lng: b.lng,
           title: s.name,
           lines: [
-            b.birthplace,
+            withUsState(b.birthplace, b.lat, b.lng, states),
             `${s.goals} goal${s.goals === 1 ? "" : "s"} seen`,
           ].filter(Boolean),
         });
       }
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scorers, data.scorerInfo, data.playerInfo, states]);
+
+  const points = useMemo<GeoPoint[]>(() => {
+    const out: GeoPoint[] = [];
+    for (const s of scorers) {
+      const b = birthOf(s);
+      if (b.lat != null && b.lng != null) out.push({ lat: b.lat, lng: b.lng, country: b.country });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -171,7 +185,8 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
         <ul className="grid gap-2.5">
           {scorers.map((s) => {
             const info = data.scorerInfo[s.key];
-            const birthplace = birthOf(s).birthplace;
+            const b = birthOf(s);
+            const birthplace = withUsState(b.birthplace, b.lat, b.lng, states);
             const isEditing = editing === s.key;
             return (
               <li key={s.key} className="card p-4">
@@ -229,9 +244,7 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
           })}
         </ul>
       ) : markers.length > 0 ? (
-        <div className="card p-3 sm:p-4">
-          <MapPanel markers={markers} />
-        </div>
+        <BirthplaceMap markers={markers} points={points} />
       ) : (
         <div className="card p-10 text-center">
           <div className="text-3xl mb-2">🌍</div>
