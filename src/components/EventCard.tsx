@@ -27,6 +27,10 @@ export function EventCard({
   onDelete?: (id: string) => void;
 }) {
   const e = event;
+  const apiLinked =
+    e.scorers.some((s) => s.playerId != null) ||
+    e.homeLineup.some((p) => p.playerId != null) ||
+    e.awayLineup.some((p) => p.playerId != null);
   const homeWon =
     e.homeScore != null && e.awayScore != null && e.homeScore > e.awayScore;
   const awayWon =
@@ -43,7 +47,17 @@ export function EventCard({
               {SPORT_EMOJI[e.sport]}
             </span>
             <div className="flex flex-col">
-              <span className="overline">{SPORT_LABELS[e.sport]}</span>
+              <span className="overline flex items-center gap-1.5">
+                {SPORT_LABELS[e.sport]}
+                {apiLinked && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-sage-soft px-1.5 py-0.5 text-[10px] font-bold text-sage normal-case tracking-normal"
+                    title="Linked to API-Football — lineups & scorers synced"
+                  >
+                    🔗 API
+                  </span>
+                )}
+              </span>
               {e.competition && (
                 <span className="text-xs text-ink-soft font-medium">
                   {e.competition}
