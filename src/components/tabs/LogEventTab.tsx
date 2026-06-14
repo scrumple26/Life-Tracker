@@ -25,13 +25,21 @@ function numOrNull(v: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export function LogEventTab() {
+export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
   const { user, data, saveEvents } = useApp();
 
   // ── form state ──
   const [date, setDate] = useState(todayISO());
   const [dateUnknown, setDateUnknown] = useState(false);
-  const [sport, setSport] = useState<Sport>("soccer");
+  const [sport, setSport] = useState<Sport>(filterSport ?? "soccer");
+
+  // Match the form's sport to the active filter when it changes (adjust
+  // state during render — the React-recommended alternative to an effect).
+  const [prevFilter, setPrevFilter] = useState(filterSport);
+  if (filterSport && filterSport !== prevFilter) {
+    setPrevFilter(filterSport);
+    setSport(filterSport);
+  }
   const [side, setSide] = useState<SportEvent["side"]>("home");
   const [homeTeam, setHomeTeam] = useState("");
   const [awayTeam, setAwayTeam] = useState("");
@@ -165,7 +173,10 @@ export function LogEventTab() {
 
   // ── grouped + sorted list ──
   const grouped = useMemo(() => {
-    const sorted = [...data.events].sort((a, b) => {
+    const base = filterSport
+      ? data.events.filter((e) => e.sport === filterSport)
+      : data.events;
+    const sorted = [...base].sort((a, b) => {
       const ad = a.date ?? "";
       const bd = b.date ?? "";
       if (ad && bd) return bd.localeCompare(ad);
@@ -180,7 +191,7 @@ export function LogEventTab() {
       byYear.get(year)!.push(e);
     }
     return Array.from(byYear.entries());
-  }, [data.events]);
+  }, [data.events, filterSport]);
 
   return (
     <section className="lf-rise">

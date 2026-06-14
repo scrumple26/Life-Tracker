@@ -59,9 +59,14 @@ export interface LatLng {
   lng: number;
 }
 
-// scorerInfo: keyed by normalized scorer name -> birthplace info
+// scorerInfo: keyed by normalized scorer name -> birthplace info.
+// Legacy data stored structured city/state/country; newer data stores a
+// single `birthplace` string. Both are kept so nothing is lost.
 export interface ScorerInfo {
   birthplace?: string;
+  city?: string;
+  state?: string;
+  country?: string;
   lat?: number;
   lng?: number;
 }
@@ -145,6 +150,19 @@ export const SPORT_LABELS: Record<Sport, string> = {
   tennis: "Tennis",
   rugby: "Rugby",
   mma: "MMA / Boxing",
+  other: "Other",
+};
+
+// Short labels for compact filter chips.
+export const SPORT_SHORT: Record<Sport, string> = {
+  soccer: "Soccer",
+  basketball: "Basketball",
+  baseball: "Baseball",
+  "american-football": "Football",
+  hockey: "Hockey",
+  tennis: "Tennis",
+  rugby: "Rugby",
+  mma: "MMA",
   other: "Other",
 };
 

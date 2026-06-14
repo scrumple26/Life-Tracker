@@ -2,15 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { useApp } from "@/lib/data";
-import { SPORT_LABELS, type Sport } from "@/lib/types";
+import { type Sport } from "@/lib/types";
 import { MapPanel, type MapMarker } from "../Map";
 import { EventCard } from "../EventCard";
 
-const SPORTS = Object.keys(SPORT_LABELS) as Sport[];
-
-export function StadiumsTab() {
+export function StadiumsTab({ sport }: { sport?: Sport }) {
   const { data } = useApp();
-  const [sport, setSport] = useState<string>("");
   const [year, setYear] = useState<string>("");
 
   const years = useMemo(() => {
@@ -68,29 +65,16 @@ export function StadiumsTab() {
         Every venue you&apos;ve visited. Tap a pin to see the games played there.
       </p>
 
-      <div className="grid sm:grid-cols-2 gap-4 mb-5">
-        <div>
-          <label className="field-label">Filter by sport</label>
-          <select className="field" value={sport} onChange={(e) => setSport(e.target.value)}>
-            <option value="">All sports</option>
-            {SPORTS.map((s) => (
-              <option key={s} value={s}>
-                {SPORT_LABELS[s]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="field-label">Filter by year</label>
-          <select className="field" value={year} onChange={(e) => setYear(e.target.value)}>
-            <option value="">All years</option>
-            {years.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="mb-5 max-w-xs">
+        <label className="field-label">Filter by year</label>
+        <select className="field" value={year} onChange={(e) => setYear(e.target.value)}>
+          <option value="">All years</option>
+          {years.map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="card p-3 sm:p-4 mb-3">

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useApp } from "@/lib/data";
+import { SPORT_SHORT, SPORT_EMOJI, type Sport } from "@/lib/types";
 import { BrandMark, BrandName } from "./Brand";
 import { LogEventTab } from "./tabs/LogEventTab";
 import { StadiumsTab } from "./tabs/StadiumsTab";
@@ -31,10 +32,33 @@ const SPORT_TABS = [
 
 type SportTabId = (typeof SPORT_TABS)[number]["id"];
 
+// Order sports are offered in the filter (most common first).
+const SPORT_ORDER: Sport[] = [
+  "soccer",
+  "american-football",
+  "basketball",
+  "baseball",
+  "hockey",
+  "tennis",
+  "rugby",
+  "mma",
+  "other",
+];
+
 export function AppShell() {
-  const { user, signOutUser } = useApp();
+  const { user, signOutUser, data } = useApp();
   const [tab, setTab] = useState<TabId>("sports");
   const [sportTab, setSportTab] = useState<SportTabId>("log");
+  const [sportFilter, setSportFilter] = useState<Sport | "all">("all");
+
+  // Only offer sports the user actually has events for.
+  const availableSports = useMemo(() => {
+    const present = new Set(data.events.map((e) => e.sport));
+    return SPORT_ORDER.filter((s) => present.has(s));
+  }, [data.events]);
+
+  const activeSport: Sport | undefined =
+    sportFilter === "all" ? undefined : sportFilter;
 
   return (
     <div className="min-h-dvh">
@@ -100,11 +124,28 @@ export function AppShell() {
               </div>
             </div>
 
-            {sportTab === "log" && <LogEventTab />}
-            {sportTab === "stadiums" && <StadiumsTab />}
-            {sportTab === "scorers" && <ScorersTab />}
-            {sportTab === "teams" && <TeamsTab />}
-            {sportTab === "photos" && <PhotosTab />}
+            {availableSports.length > 1 && (
+              <div className="mb-6 flex gap-1.5 flex-wrap">
+                <SportChip active={sportFilter === "all"} onClick={() => setSportFilter("all")}>
+                  All sports
+                </SportChip>
+                {availableSports.map((s) => (
+                  <SportChip
+                    key={s}
+                    active={sportFilter === s}
+                    onClick={() => setSportFilter(s)}
+                  >
+                    {SPORT_EMOJI[s]} {SPORT_SHORT[s]}
+                  </SportChip>
+                ))}
+              </div>
+            )}
+
+            {sportTab === "log" && <LogEventTab sport={activeSport} />}
+            {sportTab === "stadiums" && <StadiumsTab sport={activeSport} />}
+            {sportTab === "scorers" && <ScorersTab sport={activeSport} />}
+            {sportTab === "teams" && <TeamsTab sport={activeSport} />}
+            {sportTab === "photos" && <PhotosTab sport={activeSport} />}
           </>
         )}
         {tab === "restaurants" && <RestaurantsTab />}
@@ -112,5 +153,28 @@ export function AppShell() {
         {tab === "concerts" && <ConcertsTab />}
       </main>
     </div>
+  );
+}
+
+function SportChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3.5 py-1.5 rounded-full text-sm font-semibold transition ${
+        active
+          ? "bg-terracotta text-white shadow-[0_6px_14px_rgba(60,110,71,0.28)]"
+          : "bg-paper-2 text-ink-soft hover:text-ink"
+      }`}
+    >
+      {children}
+    </button>
   );
 }

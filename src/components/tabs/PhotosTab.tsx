@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/data";
+import type { Sport } from "@/lib/types";
 
 interface Photo {
   url: string;
@@ -9,13 +10,14 @@ interface Photo {
   year: string;
 }
 
-export function PhotosTab() {
+export function PhotosTab({ sport }: { sport?: Sport }) {
   const { data } = useApp();
   const [lightbox, setLightbox] = useState<number | null>(null);
 
   const photos = useMemo<Photo[]>(() => {
     const out: Photo[] = [];
-    for (const e of data.events) {
+    const evts = sport ? data.events.filter((e) => e.sport === sport) : data.events;
+    for (const e of evts) {
       const year = e.date ? e.date.slice(0, 4) : "Undated";
       const caption = [
         [e.homeTeam, e.awayTeam].filter(Boolean).join(" vs "),
@@ -26,7 +28,7 @@ export function PhotosTab() {
       for (const url of e.photos) out.push({ url, caption, year });
     }
     return out;
-  }, [data.events]);
+  }, [data.events, sport]);
 
   const byYear = useMemo(() => {
     const m = new Map<string, Photo[]>();

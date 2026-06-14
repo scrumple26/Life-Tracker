@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/lib/data";
 import { geocode } from "@/lib/geo";
-import type { ScorerInfo } from "@/lib/types";
+import type { ScorerInfo, Sport } from "@/lib/types";
 import { MapPanel, type MapMarker } from "../Map";
 
 interface ScorerAgg {
@@ -12,16 +12,21 @@ interface ScorerAgg {
   goals: number;
 }
 
-export function ScorersTab() {
+export function ScorersTab({ sport }: { sport?: Sport }) {
   const { data, saveField } = useApp();
   const [view, setView] = useState<"list" | "map">("list");
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
+  const events = useMemo(
+    () => (sport ? data.events.filter((e) => e.sport === sport) : data.events),
+    [data.events, sport]
+  );
+
   const scorers = useMemo<ScorerAgg[]>(() => {
     const byKey = new Map<string, ScorerAgg>();
-    for (const e of data.events) {
+    for (const e of events) {
       for (const s of e.scorers) {
         const name = s.name?.trim();
         if (!name) continue;
@@ -33,7 +38,7 @@ export function ScorersTab() {
     const arr: ScorerAgg[] = Array.from(byKey.values());
     arr.sort((a, b) => b.goals - a.goals || a.name.localeCompare(b.name));
     return arr;
-  }, [data.events]);
+  }, [events]);
 
   const markers = useMemo<MapMarker[]>(() => {
     const out: MapMarker[] = [];

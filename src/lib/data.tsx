@@ -126,6 +126,31 @@ function normalizeConcert(c: Record<string, unknown>): Concert {
   };
 }
 
+// Recover birthplaces saved by the legacy app, which stored structured
+// { city, state, country, lat, lng } instead of a single `birthplace` string.
+function normalizeScorerInfo(raw: unknown): UserData["scorerInfo"] {
+  if (!raw || typeof raw !== "object") return {};
+  const out: UserData["scorerInfo"] = {};
+  for (const [key, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!v || typeof v !== "object") continue;
+    const o = v as Record<string, unknown>;
+    const city = asStr(o.city);
+    const state = asStr(o.state);
+    const country = asStr(o.country);
+    const birthplace =
+      asStr(o.birthplace) || [city, state, country].filter(Boolean).join(", ");
+    out[key] = {
+      birthplace: birthplace || undefined,
+      city: city || undefined,
+      state: state || undefined,
+      country: country || undefined,
+      lat: asNum(o.lat) ?? undefined,
+      lng: asNum(o.lng) ?? undefined,
+    };
+  }
+  return out;
+}
+
 function normalizeList<T>(
   raw: unknown,
   fn: (o: Record<string, unknown>) => T
@@ -145,7 +170,7 @@ function normalizeData(raw: Record<string, unknown> | undefined): UserData {
           .filter((e) => e && typeof e.id === "string")
           .map(normalizeEvent)
       : [],
-    scorerInfo: (raw.scorerInfo as UserData["scorerInfo"]) ?? {},
+    scorerInfo: normalizeScorerInfo(raw.scorerInfo),
     teamLocs: (raw.teamLocs as UserData["teamLocs"]) ?? {},
     restCategories: normalizeList(raw.restCategories, normalizeRestCategory),
     restaurants: normalizeList(raw.restaurants, normalizeRestaurant),

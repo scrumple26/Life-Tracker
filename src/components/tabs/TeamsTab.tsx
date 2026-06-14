@@ -2,42 +2,43 @@
 
 import { useMemo, useState } from "react";
 import { useApp } from "@/lib/data";
-import type { SportEvent } from "@/lib/types";
+import type { Sport, SportEvent } from "@/lib/types";
 import { MapPanel, type MapMarker } from "../Map";
 
 interface TeamAgg {
   name: string;
-  games: SportEvent[];
+  games: number;
   lat: number | null;
   lng: number | null;
 }
 
-export function TeamsTab() {
+export function TeamsTab({ sport }: { sport?: Sport }) {
   const { data } = useApp();
   const [view, setView] = useState<"list" | "map">("list");
 
   const teams = useMemo<TeamAgg[]>(() => {
+    const src = sport ? data.events.filter((e) => e.sport === sport) : data.events;
     const byTeam = new Map<string, TeamAgg>();
     const add = (name: string, e: SportEvent) => {
       const key = name.trim();
       if (!key) return;
       if (!byTeam.has(key))
-        byTeam.set(key, { name: key, games: [], lat: null, lng: null });
+        byTeam.set(key, { name: key, games: 0, lat: null, lng: null });
       const t = byTeam.get(key)!;
-      t.games.push(e);
+      t.games += 1;
       if (t.lat == null && e.lat != null && e.lng != null) {
         t.lat = e.lat;
         t.lng = e.lng;
       }
     };
-    for (const e of data.events) {
+    for (const e of src) {
       add(e.homeTeam, e);
       add(e.awayTeam, e);
     }
     return Array.from(byTeam.values()).sort(
-      (a, b) => b.games.length - a.games.length || a.name.localeCompare(b.name)
+      (a, b) => b.games - a.games || a.name.localeCompare(b.name)
     );
-  }, [data.events]);
+  }, [data.events, sport]);
 
   const markers = useMemo<MapMarker[]>(
     () =>
@@ -48,7 +49,7 @@ export function TeamsTab() {
           lat: t.lat!,
           lng: t.lng!,
           title: t.name,
-          lines: [`${t.games.length} game${t.games.length === 1 ? "" : "s"} seen`],
+          lines: [`${t.games} game${t.games === 1 ? "" : "s"} seen`],
         })),
     [teams]
   );
@@ -88,7 +89,7 @@ export function TeamsTab() {
             <div key={t.name} className="card p-4 flex items-center justify-between gap-3">
               <span className="font-medium text-ink">{t.name}</span>
               <span className="chip">
-                {t.games.length} game{t.games.length === 1 ? "" : "s"}
+                {t.games} game{t.games === 1 ? "" : "s"}
               </span>
             </div>
           ))}
