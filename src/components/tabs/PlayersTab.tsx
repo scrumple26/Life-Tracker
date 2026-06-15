@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useApp } from "@/lib/data";
-import type { LineupEntry, Sport, SportEvent } from "@/lib/types";
+import { geocode } from "@/lib/geo";
+import type { LineupEntry, PlayerInfo, Sport, SportEvent } from "@/lib/types";
 import { type MapMarker } from "../Map";
 import { BirthplaceMap, type GeoPoint } from "../BirthplaceMap";
 import { FetchBirthplacesButton } from "../FetchBirthplacesButton";
@@ -23,9 +24,42 @@ interface PlayerAgg {
 }
 
 export function PlayersTab({ sport }: { sport?: Sport }) {
-  const { data } = useApp();
+  const { data, saveField } = useApp();
   const [view, setView] = useState<"map" | "list">("map");
   const states = useGeo(loadStates, true); // for "City, State, USA" labels
+  const [editKey, setEditKey] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  // Manually set/correct a player's birthplace (for ones the API can't resolve).
+  async function saveBirthplace(p: { key: string; name: string }) {
+    const place = draft.trim();
+    setBusyKey(p.key);
+    try {
+      const next: Record<string, PlayerInfo> = { ...data.playerInfo };
+      const info: PlayerInfo = { ...(next[p.key] ?? {}), name: p.name };
+      if (place) {
+        info.birthplace = place;
+        const parts = place.split(",");
+        if (parts.length > 1) info.country = parts[parts.length - 1].trim();
+        const coords = await geocode(place);
+        if (coords) {
+          info.lat = coords.lat;
+          info.lng = coords.lng;
+        }
+      } else {
+        delete info.birthplace;
+        delete info.lat;
+        delete info.lng;
+      }
+      next[p.key] = info;
+      await saveField("playerInfo", next);
+      setEditKey(null);
+      setDraft("");
+    } finally {
+      setBusyKey(null);
+    }
+  }
 
   // Players come from soccer lineups (the only sport with lineup data).
   const players = useMemo<PlayerAgg[]>(() => {
@@ -190,19 +224,62 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
             <ul className="grid gap-2 sm:grid-cols-2">
               {players.map((p) => {
                 const info = data.playerInfo[p.key];
+                const isEditing = editKey === p.key;
+                const hasLoc = info?.lat != null && info?.lng != null;
                 return (
-                  <li key={p.key} className="card p-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium text-ink truncate">{p.name}</p>
-                      {info?.birthplace && (
-                        <p className="text-xs text-muted truncate">
-                          📍 {withUsState(info.birthplace, info.lat, info.lng, states)}
-                        </p>
-                      )}
+                  <li key={p.key} className="card p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium text-ink truncate">{p.name}</p>
+                        {info?.birthplace && !isEditing && (
+                          <p className={`text-xs truncate ${hasLoc ? "text-muted" : "text-clay"}`}>
+                            📍 {withUsState(info.birthplace, info.lat, info.lng, states)}
+                            {!hasLoc && " (not located)"}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="chip">
+                          {p.apps.length} game{p.apps.length === 1 ? "" : "s"}
+                        </span>
+                        {!isEditing && (
+                          <button
+                            className="text-xs text-terracotta hover:text-terracotta-dark"
+                            onClick={() => {
+                              setEditKey(p.key);
+                              setDraft(info?.birthplace ?? "");
+                            }}
+                          >
+                            {info?.birthplace ? "Edit" : "Add birthplace"}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <span className="chip shrink-0">
-                      {p.apps.length} game{p.apps.length === 1 ? "" : "s"}
-                    </span>
+                    {isEditing && (
+                      <div className="flex gap-2 mt-3">
+                        <input
+                          className="field flex-1"
+                          placeholder="City, Country"
+                          value={draft}
+                          autoFocus
+                          onChange={(e) => setDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveBirthplace(p);
+                            if (e.key === "Escape") setEditKey(null);
+                          }}
+                        />
+                        <button
+                          className="btn btn-primary btn-sm"
+                          disabled={busyKey === p.key}
+                          onClick={() => saveBirthplace(p)}
+                        >
+                          {busyKey === p.key ? "Saving…" : "Save"}
+                        </button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setEditKey(null)}>
+                          Cancel
+                        </button>
+                      </div>
+                    )}
                   </li>
                 );
               })}
