@@ -27,7 +27,7 @@ export function FetchBirthplacesButton({
     return !cur || cur.lat == null || cur.lng == null;
   });
 
-  async function run() {
+  async function run(force = false) {
     if (!players.length) return;
     setRunning(true);
     const ac = new AbortController();
@@ -35,6 +35,7 @@ export function FetchBirthplacesButton({
     try {
       await fetchPlayerBirthplaces(players, data.playerInfo, {
         signal: ac.signal,
+        force,
         onProgress: setProgress,
         onBatch: (info) => saveField("playerInfo", info),
       });
@@ -65,8 +66,21 @@ export function FetchBirthplacesButton({
   }
 
   return (
-    <button className="btn btn-ghost btn-sm" onClick={run} disabled={missing.length === 0}>
-      {missing.length === 0 ? "Birthplaces up to date" : `${label} (${missing.length})`}
-    </button>
+    <div className="flex items-center gap-2">
+      <button
+        className="btn btn-ghost btn-sm"
+        onClick={() => run(false)}
+        disabled={missing.length === 0}
+      >
+        {missing.length === 0 ? "Birthplaces up to date" : `${label} (${missing.length})`}
+      </button>
+      <button
+        className="text-xs text-muted hover:text-terracotta"
+        onClick={() => run(true)}
+        title="Re-look-up every birthplace (fixes wrong locations)"
+      >
+        ↻ Re-fetch all
+      </button>
+    </div>
   );
 }

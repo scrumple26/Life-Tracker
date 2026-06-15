@@ -34,18 +34,21 @@ export async function fetchPlayerBirthplaces(
     onProgress?: (p: FetchProgress) => void;
     onBatch?: (info: Record<string, PlayerInfo>) => Promise<void> | void;
     signal?: AbortSignal;
+    force?: boolean; // re-fetch even players that already have coordinates
   } = {}
 ): Promise<Record<string, PlayerInfo>> {
-  const { onProgress, onBatch, signal } = opts;
+  const { onProgress, onBatch, signal, force } = opts;
   const result: Record<string, PlayerInfo> = { ...existing };
 
-  // Dedupe by key, and only process players we don't already have coords for.
+  // Dedupe by key. By default skip players we already have coords for; with
+  // `force`, re-fetch everyone (e.g. to re-geocode after a geocoder change).
   const seen = new Set<string>();
   const todo = players.filter((p) => {
     if (!p.name.trim()) return false;
     const key = playerKey(p);
     if (seen.has(key)) return false;
     seen.add(key);
+    if (force) return true;
     const cur = result[key];
     return !cur || cur.lat == null || cur.lng == null;
   });
