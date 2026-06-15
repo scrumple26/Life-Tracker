@@ -26,6 +26,7 @@ export function BirthplaceMap({
 }) {
   const [showStates, setShowStates] = useState(false);
   const [showCountries, setShowCountries] = useState(false);
+  const [showPins, setShowPins] = useState(true);
   const states = useGeo(loadStates, showStates);
   const countries = useGeo(loadCountries, showCountries);
 
@@ -88,11 +89,46 @@ export function BirthplaceMap({
         >
           US states
         </Toggle>
+        <Toggle on={showPins} loading={false} count={null} onClick={() => setShowPins((v) => !v)}>
+          {showPins ? "Pins on" : "Pins off"}
+        </Toggle>
       </div>
       <div className="card p-3 sm:p-4">
-        <MapPanel markers={markers} overlays={overlays} />
+        <MapPanel markers={markers} overlays={overlays} showMarkers={showPins} />
       </div>
+
+      {showCountries && countryInfo && (
+        <CollectedList
+          title={`Countries collected (${countryInfo.set.size}/${countryInfo.total})`}
+          names={[...countryInfo.set].sort()}
+        />
+      )}
+      {showStates && stateInfo && (
+        <CollectedList
+          title={`US states collected (${stateInfo.set.size}/${stateInfo.total})`}
+          names={[...stateInfo.set].sort()}
+        />
+      )}
     </>
+  );
+}
+
+function CollectedList({ title, names }: { title: string; names: string[] }) {
+  return (
+    <div className="mt-3">
+      <p className="text-xs font-semibold text-ink-soft mb-2">{title}</p>
+      {names.length === 0 ? (
+        <p className="text-xs text-muted">None yet — fetch birthplaces to fill these in.</p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {names.map((n) => (
+            <span key={n} className="chip">
+              {n}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

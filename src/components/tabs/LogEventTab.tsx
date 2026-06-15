@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "@/lib/firebase";
 import { newId, useApp } from "@/lib/data";
@@ -70,6 +70,30 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
+
+  // Jump to + highlight an event when arriving via a "#log-event-<id>" link
+  // (e.g. clicking a match link in a birthplace-map popup).
+  useEffect(() => {
+    const scrollToHash = () => {
+      const m = window.location.hash.match(/^#log-event-(.+)$/);
+      if (!m) return;
+      const el = document.getElementById(`log-event-${m[1]}`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.style.outline = "3px solid var(--color-terracotta)";
+      el.style.outlineOffset = "3px";
+      window.setTimeout(() => {
+        el.style.outline = "";
+        el.style.outlineOffset = "";
+      }, 2600);
+    };
+    const t = window.setTimeout(scrollToHash, 80);
+    window.addEventListener("hashchange", scrollToHash);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("hashchange", scrollToHash);
+    };
+  }, []);
 
   // ── API-Football match finder ──
   const [teamQuery, setTeamQuery] = useState("");

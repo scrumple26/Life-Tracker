@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/data";
 import { SPORT_SHORT, SPORT_EMOJI, type Sport } from "@/lib/types";
 import { BrandMark, BrandName } from "./Brand";
@@ -61,6 +61,20 @@ export function AppShell() {
 
   const activeSport: Sport | undefined =
     sportFilter === "all" ? undefined : sportFilter;
+
+  // A "#log-event-<id>" hash (e.g. from a birthplace-map popup) jumps to the
+  // Log Event tab; LogEventTab then scrolls to and highlights the card.
+  useEffect(() => {
+    const handle = () => {
+      if (window.location.hash.startsWith("#log-event-")) {
+        setTab("sports");
+        setSportTab("log");
+      }
+    };
+    handle();
+    window.addEventListener("hashchange", handle);
+    return () => window.removeEventListener("hashchange", handle);
+  }, []);
 
   return (
     <div className="min-h-dvh">

@@ -6,12 +6,18 @@ import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from "react-leaflet";
 import type { GeoCollection } from "@/lib/geojson";
 
+export interface PopupRow {
+  text: string;
+  href?: string;
+}
+
 export interface MapMarker {
   id: string;
   lat: number;
   lng: number;
   title: string;
   lines?: string[];
+  rows?: PopupRow[]; // richer rows (optionally linked) — preferred over `lines`
 }
 
 // Warm terracotta teardrop pin (avoids Leaflet's missing-image default icon).
@@ -59,10 +65,12 @@ const HIGHLIGHT_STYLE = {
 export default function MapView({
   markers,
   overlays,
+  showMarkers = true,
   className = "",
 }: {
   markers: MapMarker[];
   overlays?: GeoCollection[];
+  showMarkers?: boolean;
   className?: string;
 }) {
   const center: [number, number] = markers.length
@@ -88,18 +96,32 @@ export default function MapView({
           interactive={false}
         />
       ))}
-      {markers.map((m, i) => (
+      {showMarkers && markers.map((m, i) => (
         <Marker
           key={m.id}
           position={[m.lat, m.lng]}
-          icon={pinIcon(m.lines?.length ? m.lines.length : undefined)}
+          icon={pinIcon((m.rows?.length || m.lines?.length) ?? undefined)}
           zIndexOffset={i}
         >
           <Popup>
             <strong style={{ fontFamily: "var(--font-fraunces, serif)", fontSize: "14px" }}>
               {m.title}
             </strong>
-            {m.lines?.length ? (
+            {m.rows?.length ? (
+              <ul style={{ margin: "6px 0 0", paddingLeft: 16, fontSize: 12 }}>
+                {m.rows.map((r, j) => (
+                  <li key={j} style={{ marginBottom: 2 }}>
+                    {r.href ? (
+                      <a href={r.href} style={{ color: "#3c6e47", textDecoration: "underline" }}>
+                        {r.text}
+                      </a>
+                    ) : (
+                      r.text
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : m.lines?.length ? (
               <ul style={{ margin: "6px 0 0", paddingLeft: 16, fontSize: 12 }}>
                 {m.lines.map((l, j) => (
                   <li key={j}>{l}</li>

@@ -38,7 +38,7 @@ export function EventCard({
   const d = formatDate(e.date);
 
   return (
-    <div className="ticket lf-rise group">
+    <div id={`log-event-${e.id}`} className="ticket lf-rise group scroll-mt-24">
       <div className="p-4 sm:p-5">
         {/* header strip */}
         <div className="flex items-start justify-between gap-3">

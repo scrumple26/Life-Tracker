@@ -16,15 +16,17 @@ const MapView = dynamic(() => import("./MapView"), {
 export function MapPanel({
   markers,
   overlays,
+  showMarkers = true,
   className = "h-[420px]",
 }: {
   markers: MapMarker[];
   overlays?: GeoCollection[];
+  showMarkers?: boolean;
   className?: string;
 }) {
   return (
     <div className={className}>
-      <MapView markers={markers} overlays={overlays} />
+      <MapView markers={markers} overlays={overlays} showMarkers={showMarkers} />
     </div>
   );
 }

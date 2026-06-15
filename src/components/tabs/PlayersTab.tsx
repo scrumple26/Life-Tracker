@@ -2,18 +2,24 @@
 
 import { useMemo, useState } from "react";
 import { useApp } from "@/lib/data";
-import type { Sport } from "@/lib/types";
+import type { LineupEntry, Sport, SportEvent } from "@/lib/types";
 import { type MapMarker } from "../Map";
 import { BirthplaceMap, type GeoPoint } from "../BirthplaceMap";
 import { FetchBirthplacesButton } from "../FetchBirthplacesButton";
 import { playerKey } from "@/lib/birthplaces";
 import { loadStates, useGeo, withUsState } from "@/lib/geojson";
 
+interface Appearance {
+  eventId: string;
+  team: string;
+  opponent: string;
+  date: string | null;
+}
 interface PlayerAgg {
   key: string;
   id?: number;
   name: string;
-  games: number;
+  apps: Appearance[];
 }
 
 export function PlayersTab({ sport }: { sport?: Sport }) {
@@ -27,18 +33,23 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
       (e) => e.sport === "soccer" && (!sport || e.sport === sport)
     );
     const byKey = new Map<string, PlayerAgg>();
-    for (const e of evts) {
-      for (const p of [...e.homeLineup, ...e.awayLineup]) {
-        const name = p.name?.trim();
-        if (!name) continue;
-        const key = playerKey({ id: p.playerId, name });
-        const cur = byKey.get(key);
-        if (cur) cur.games += 1;
-        else byKey.set(key, { key, id: p.playerId, name, games: 1 });
+    const add = (p: LineupEntry, e: SportEvent, team: string, opponent: string) => {
+      const name = p.name?.trim();
+      if (!name) return;
+      const key = playerKey({ id: p.playerId, name });
+      let cur = byKey.get(key);
+      if (!cur) {
+        cur = { key, id: p.playerId, name, apps: [] };
+        byKey.set(key, cur);
       }
+      cur.apps.push({ eventId: e.id, team, opponent, date: e.date });
+    };
+    for (const e of evts) {
+      for (const p of e.homeLineup) add(p, e, e.homeTeam, e.awayTeam);
+      for (const p of e.awayLineup) add(p, e, e.awayTeam, e.homeTeam);
     }
     return [...byKey.values()].sort(
-      (a, b) => b.games - a.games || a.name.localeCompare(b.name)
+      (a, b) => b.apps.length - a.apps.length || a.name.localeCompare(b.name)
     );
   }, [data.events, sport]);
 
@@ -48,16 +59,23 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
       const info = data.playerInfo[pl.key];
       if (info?.lat == null || info?.lng == null) continue;
       const key = `${info.lat.toFixed(4)},${info.lng.toFixed(4)}`;
-      if (!byCoord.has(key)) {
-        byCoord.set(key, {
+      let mk = byCoord.get(key);
+      if (!mk) {
+        mk = {
           id: key,
           lat: info.lat,
           lng: info.lng,
           title: withUsState(info.birthplace, info.lat, info.lng, states) || pl.name,
-          lines: [],
+          rows: [],
+        };
+        byCoord.set(key, mk);
+      }
+      for (const a of pl.apps) {
+        mk.rows!.push({
+          text: `${pl.name} — ${a.team}${a.date ? ` · ${a.date}` : ""}`,
+          href: `#log-event-${a.eventId}`,
         });
       }
-      byCoord.get(key)!.lines!.push(pl.name);
     }
     return Array.from(byCoord.values());
   }, [players, data.playerInfo, states]);
@@ -145,7 +163,7 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
                       )}
                     </div>
                     <span className="chip shrink-0">
-                      {p.games} game{p.games === 1 ? "" : "s"}
+                      {p.apps.length} game{p.apps.length === 1 ? "" : "s"}
                     </span>
                   </li>
                 );
