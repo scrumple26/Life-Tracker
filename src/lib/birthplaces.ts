@@ -94,6 +94,20 @@ export async function fetchPlayerBirthplaces(
             info.lng = coords.lng;
           }
         }
+        // Fallback: if the city couldn't be located, place them at the country
+        // (marked approximate so it doesn't get attributed to a US state).
+        if (info.lat == null && b.country) {
+          let cc = geoCache.get(b.country);
+          if (cc === undefined) {
+            cc = await geocode(b.country);
+            geoCache.set(b.country, cc);
+          }
+          if (cc) {
+            info.lat = cc.lat;
+            info.lng = cc.lng;
+            info.approx = true;
+          }
+        }
         result[key] = info;
       }
     } catch {

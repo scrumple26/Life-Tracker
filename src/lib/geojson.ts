@@ -121,10 +121,12 @@ export function withUsState(
   birthplace: string | undefined,
   lat: number | null | undefined,
   lng: number | null | undefined,
-  states: GeoCollection | null
+  states: GeoCollection | null,
+  approx = false
 ): string {
   if (!birthplace) return "";
-  if (!states || lat == null || lng == null) return birthplace;
+  // Country-level (approx) coords don't pin a real city, so don't claim a state.
+  if (approx || !states || lat == null || lng == null) return birthplace;
   const st = featureForPoint(lat, lng, states);
   if (!st) return birthplace;
   const city = birthplace.split(",")[0].trim();

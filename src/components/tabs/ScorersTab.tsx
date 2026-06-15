@@ -56,7 +56,8 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
     const lng = api?.lng ?? manual?.lng ?? null;
     const birthplace = api?.birthplace ?? manual?.birthplace ?? "";
     const country = api?.country ?? manual?.country ?? "";
-    return { lat, lng, birthplace, country };
+    const approx = api?.lat != null ? !!api.approx : false;
+    return { lat, lng, birthplace, country, approx };
   };
 
   const markers = useMemo<MapMarker[]>(() => {
@@ -77,7 +78,7 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
         pin = {
           lat: b.lat,
           lng: b.lng,
-          title: withUsState(b.birthplace, b.lat, b.lng, states) || s.name,
+          title: withUsState(b.birthplace, b.lat, b.lng, states, b.approx) || s.name,
           rows: [],
           seen: new Set(),
         };
@@ -103,7 +104,8 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
     const out: GeoPoint[] = [];
     for (const s of scorers) {
       const b = birthOf(s);
-      if (b.lat != null && b.lng != null) out.push({ lat: b.lat, lng: b.lng, country: b.country });
+      if (b.lat != null && b.lng != null)
+        out.push({ lat: b.lat, lng: b.lng, country: b.country, approx: b.approx });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -205,7 +207,7 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
           {scorers.map((s) => {
             const info = data.scorerInfo[s.key];
             const b = birthOf(s);
-            const birthplace = withUsState(b.birthplace, b.lat, b.lng, states);
+            const birthplace = withUsState(b.birthplace, b.lat, b.lng, states, b.approx);
             const isEditing = editing === s.key;
             return (
               <li key={s.key} className="card p-4">

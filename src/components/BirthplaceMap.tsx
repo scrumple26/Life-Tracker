@@ -15,6 +15,7 @@ export interface GeoPoint {
   lat: number;
   lng: number;
   country?: string;
+  approx?: boolean; // country-level placement — counts for country, not state
 }
 
 export function BirthplaceMap({
@@ -34,6 +35,7 @@ export function BirthplaceMap({
     if (!states) return null;
     const set = new Set<string>();
     for (const p of points) {
+      if (p.approx) continue; // country-level coords can't identify a state
       const s = featureForPoint(p.lat, p.lng, states);
       if (s) set.add(s);
     }

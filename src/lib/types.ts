@@ -132,6 +132,7 @@ export interface PlayerInfo {
   dob?: string;
   lat?: number;
   lng?: number;
+  approx?: boolean; // coords are country-level (city couldn't be geocoded)
 }
 
 // The whole per-user document.

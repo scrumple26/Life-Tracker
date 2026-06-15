@@ -41,16 +41,27 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
       if (place) {
         info.birthplace = place;
         const parts = place.split(",");
-        if (parts.length > 1) info.country = parts[parts.length - 1].trim();
+        const country = parts.length > 1 ? parts[parts.length - 1].trim() : "";
+        if (country) info.country = country;
+        delete info.approx;
         const coords = await geocode(place);
         if (coords) {
           info.lat = coords.lat;
           info.lng = coords.lng;
+        } else if (country) {
+          // Couldn't pin the exact place — fall back to the country.
+          const cc = await geocode(country);
+          if (cc) {
+            info.lat = cc.lat;
+            info.lng = cc.lng;
+            info.approx = true;
+          }
         }
       } else {
         delete info.birthplace;
         delete info.lat;
         delete info.lng;
+        delete info.approx;
       }
       next[p.key] = info;
       await saveField("playerInfo", next);
@@ -105,7 +116,8 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
         pin = {
           lat: info.lat,
           lng: info.lng,
-          title: withUsState(info.birthplace, info.lat, info.lng, states) || pl.name,
+          title:
+            withUsState(info.birthplace, info.lat, info.lng, states, info.approx) || pl.name,
           players: new Map(),
         };
         byCoord.set(ckey, pin);
@@ -157,7 +169,7 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
     for (const pl of players) {
       const info = data.playerInfo[pl.key];
       if (info?.lat == null || info?.lng == null) continue;
-      out.push({ lat: info.lat, lng: info.lng, country: info.country });
+      out.push({ lat: info.lat, lng: info.lng, country: info.country, approx: info.approx });
     }
     return out;
   }, [players, data.playerInfo]);
@@ -233,8 +245,9 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
                         <p className="font-medium text-ink truncate">{p.name}</p>
                         {info?.birthplace && !isEditing && (
                           <p className={`text-xs truncate ${hasLoc ? "text-muted" : "text-clay"}`}>
-                            📍 {withUsState(info.birthplace, info.lat, info.lng, states)}
+                            📍 {withUsState(info.birthplace, info.lat, info.lng, states, info.approx)}
                             {!hasLoc && " (not located)"}
+                            {hasLoc && info.approx && " (country approx.)"}
                           </p>
                         )}
                       </div>

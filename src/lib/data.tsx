@@ -165,6 +165,7 @@ function normalizePlayerInfo(raw: unknown): UserData["playerInfo"] {
     if (asStr(o.dob)) info.dob = asStr(o.dob);
     if (asNum(o.lat) != null) info.lat = asNum(o.lat) as number;
     if (asNum(o.lng) != null) info.lng = asNum(o.lng) as number;
+    if (o.approx === true) info.approx = true;
     out[key] = info;
   }
   return out;
