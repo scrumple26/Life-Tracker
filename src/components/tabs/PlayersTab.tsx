@@ -106,7 +106,14 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
           }
         }
       }
-      out.push({ id: ckey, lat: pin.lat, lng: pin.lng, title: pin.title, rows });
+      out.push({
+        id: ckey,
+        lat: pin.lat,
+        lng: pin.lng,
+        title: pin.title,
+        rows,
+        count: pin.players.size,
+      });
     }
     return out;
   }, [players, data.playerInfo, states]);

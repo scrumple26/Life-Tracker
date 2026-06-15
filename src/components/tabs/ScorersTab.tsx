@@ -94,6 +94,7 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
       lng: pin.lng,
       title: pin.title,
       rows: pin.rows,
+      count: pin.rows.length,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scorers, data.scorerInfo, data.playerInfo, states]);

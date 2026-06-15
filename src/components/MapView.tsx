@@ -18,6 +18,7 @@ export interface MapMarker {
   title: string;
   lines?: string[];
   rows?: PopupRow[]; // richer rows (optionally linked) — preferred over `lines`
+  count?: number; // badge number (e.g. distinct players here); overrides row count
 }
 
 // Warm terracotta teardrop pin (avoids Leaflet's missing-image default icon).
@@ -100,7 +101,7 @@ export default function MapView({
         <Marker
           key={m.id}
           position={[m.lat, m.lng]}
-          icon={pinIcon((m.rows?.length || m.lines?.length) ?? undefined)}
+          icon={pinIcon(m.count ?? (m.rows?.length || m.lines?.length) ?? undefined)}
           zIndexOffset={i}
         >
           <Popup>
