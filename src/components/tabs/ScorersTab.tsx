@@ -60,23 +60,41 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
   };
 
   const markers = useMemo<MapMarker[]>(() => {
-    const out: MapMarker[] = [];
+    interface Pin {
+      lat: number;
+      lng: number;
+      title: string;
+      rows: { text: string }[];
+      seen: Set<string>;
+    }
+    const byCoord = new Map<string, Pin>();
     for (const s of scorers) {
       const b = birthOf(s);
-      if (b.lat != null && b.lng != null) {
-        out.push({
-          id: s.key,
+      if (b.lat == null || b.lng == null) continue;
+      const ckey = `${b.lat.toFixed(4)},${b.lng.toFixed(4)}`;
+      let pin = byCoord.get(ckey);
+      if (!pin) {
+        pin = {
           lat: b.lat,
           lng: b.lng,
-          title: s.name,
-          lines: [
-            withUsState(b.birthplace, b.lat, b.lng, states),
-            `${s.goals} goal${s.goals === 1 ? "" : "s"} seen`,
-          ].filter(Boolean),
-        });
+          title: withUsState(b.birthplace, b.lat, b.lng, states) || s.name,
+          rows: [],
+          seen: new Set(),
+        };
+        byCoord.set(ckey, pin);
       }
+      const nk = s.name.trim().toLowerCase();
+      if (pin.seen.has(nk)) continue; // one entry per scorer
+      pin.seen.add(nk);
+      pin.rows.push({ text: `${s.name} · ${s.goals} goal${s.goals === 1 ? "" : "s"} seen` });
     }
-    return out;
+    return Array.from(byCoord.entries()).map(([ckey, pin]) => ({
+      id: ckey,
+      lat: pin.lat,
+      lng: pin.lng,
+      title: pin.title,
+      rows: pin.rows,
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scorers, data.scorerInfo, data.playerInfo, states]);
 

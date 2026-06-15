@@ -54,30 +54,61 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
   }, [data.events, sport]);
 
   const markers = useMemo<MapMarker[]>(() => {
-    const byCoord = new Map<string, MapMarker>();
+    interface Pin {
+      lat: number;
+      lng: number;
+      title: string;
+      // one bucket per unique player (by normalized name) at this location
+      players: Map<string, { name: string; apps: Appearance[] }>;
+    }
+    const byCoord = new Map<string, Pin>();
     for (const pl of players) {
       const info = data.playerInfo[pl.key];
       if (info?.lat == null || info?.lng == null) continue;
-      const key = `${info.lat.toFixed(4)},${info.lng.toFixed(4)}`;
-      let mk = byCoord.get(key);
-      if (!mk) {
-        mk = {
-          id: key,
+      const ckey = `${info.lat.toFixed(4)},${info.lng.toFixed(4)}`;
+      let pin = byCoord.get(ckey);
+      if (!pin) {
+        pin = {
           lat: info.lat,
           lng: info.lng,
           title: withUsState(info.birthplace, info.lat, info.lng, states) || pl.name,
-          rows: [],
+          players: new Map(),
         };
-        byCoord.set(key, mk);
+        byCoord.set(ckey, pin);
       }
-      for (const a of pl.apps) {
-        mk.rows!.push({
-          text: `${pl.name} — ${a.team}${a.date ? ` · ${a.date}` : ""}`,
-          href: `#log-event-${a.eventId}`,
-        });
-      }
+      const nk = pl.name.trim().toLowerCase();
+      const cur = pin.players.get(nk);
+      const apps = pl.apps.map((a) => ({ ...a })); // copy out of the memoized value
+      if (cur) cur.apps.push(...apps);
+      else pin.players.set(nk, { name: pl.name, apps });
     }
-    return Array.from(byCoord.values());
+
+    const out: MapMarker[] = [];
+    for (const [ckey, pin] of byCoord) {
+      const rows: { text: string; href?: string }[] = [];
+      for (const p of pin.players.values()) {
+        // one entry per player; dedupe their appearances by match
+        const seen = new Set<string>();
+        const apps = p.apps.filter((a) => (seen.has(a.eventId) ? false : seen.add(a.eventId)));
+        if (apps.length === 1) {
+          const a = apps[0];
+          rows.push({
+            text: `${p.name} — ${a.team}${a.date ? ` · ${a.date}` : ""}`,
+            href: `#log-event-${a.eventId}`,
+          });
+        } else {
+          rows.push({ text: p.name });
+          for (const a of apps) {
+            rows.push({
+              text: `· ${a.team}${a.date ? ` · ${a.date}` : ""}`,
+              href: `#log-event-${a.eventId}`,
+            });
+          }
+        }
+      }
+      out.push({ id: ckey, lat: pin.lat, lng: pin.lng, title: pin.title, rows });
+    }
+    return out;
   }, [players, data.playerInfo, states]);
 
   const points = useMemo<GeoPoint[]>(() => {
