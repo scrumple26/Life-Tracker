@@ -6,7 +6,9 @@ import { storage } from "@/lib/firebase";
 import { newId, useApp } from "@/lib/data";
 import { geocode } from "@/lib/geo";
 import {
-  SPORT_LABELS,
+  isSoccerSport,
+  sportEmoji,
+  sportLabel,
   type LineupEntry,
   type Scorer,
   type Sport,
@@ -15,8 +17,6 @@ import {
 import type { FixtureSummary } from "@/lib/football-types";
 import { EventCard } from "../EventCard";
 import { TeamAutocomplete } from "../TeamAutocomplete";
-
-const SPORTS = Object.keys(SPORT_LABELS) as Sport[];
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -102,7 +102,7 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
   const [results, setResults] = useState<FixtureSummary[]>([]);
   const [finderMsg, setFinderMsg] = useState<string | null>(null);
 
-  const isSoccer = sport === "soccer";
+  const isSoccer = isSoccerSport(sport);
 
   async function findMatches() {
     if (dateUnknown || !date) {
@@ -200,7 +200,7 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
   function resetForm() {
     setDate(todayISO());
     setDateUnknown(false);
-    setSport("soccer");
+    setSport(filterSport ?? "soccer");
     setSide("home");
     setHomeTeam("");
     setAwayTeam("");
@@ -395,13 +395,10 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
           </div>
           <div>
             <label className="field-label">Sport</label>
-            <select className="field" value={sport} onChange={(e) => setSport(e.target.value as Sport)}>
-              {SPORTS.map((s) => (
-                <option key={s} value={s}>
-                  {SPORT_LABELS[s]}
-                </option>
-              ))}
-            </select>
+            <div className="field flex items-center gap-2 bg-paper-2/60">
+              <span aria-hidden>{sportEmoji(sport)}</span>
+              <span className="truncate">{sportLabel(sport)}</span>
+            </div>
           </div>
           <div>
             <label className="field-label">Attended as</label>

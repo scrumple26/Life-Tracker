@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { newId, useApp } from "@/lib/data";
 import { geocode } from "@/lib/geo";
-import type { Trip } from "@/lib/types";
+import type { Trip, TripLocation } from "@/lib/types";
 import { Stars } from "../Stars";
 import { MapPanel, type MapMarker } from "../Map";
 
@@ -17,6 +17,7 @@ function emptyDraft(): Trip {
     endDate: null,
     rating: 0,
     highlights: [],
+    locations: [],
     notes: "",
     lat: null,
     lng: null,
@@ -68,6 +69,22 @@ export function TripsTab() {
     setHighlightText("");
   }
 
+  function addLocation() {
+    if (!draft) return;
+    setDraft({ ...draft, locations: [...draft.locations, { id: newId(), name: "", notes: "" }] });
+  }
+  function updateLocation(id: string, patch: Partial<TripLocation>) {
+    if (!draft) return;
+    setDraft({
+      ...draft,
+      locations: draft.locations.map((l) => (l.id === id ? { ...l, ...patch } : l)),
+    });
+  }
+  function removeLocation(id: string) {
+    if (!draft) return;
+    setDraft({ ...draft, locations: draft.locations.filter((l) => l.id !== id) });
+  }
+
   async function save() {
     if (!draft || !draft.name.trim()) return;
     setBusy(true);
@@ -81,6 +98,9 @@ export function TripsTab() {
           .split("\n")
           .map((s) => s.trim())
           .filter(Boolean),
+        locations: draft.locations
+          .map((l) => ({ ...l, name: l.name.trim(), notes: l.notes.trim() }))
+          .filter((l) => l.name),
       };
       // Geocode the destination if we don't have coords yet.
       if (rec.lat == null || rec.lng == null) {
@@ -185,6 +205,44 @@ export function TripsTab() {
               />
             </div>
             <div className="sm:col-span-2">
+              <label className="field-label">Locations</label>
+              <p className="text-xs text-muted -mt-1 mb-2">
+                Stops within this trip. Each expands to show its details.
+              </p>
+              {draft.locations.length > 0 && (
+                <div className="grid gap-2 mb-2">
+                  {draft.locations.map((l) => (
+                    <div key={l.id} className="rounded-xl border border-line p-3 grid gap-2">
+                      <div className="flex gap-2">
+                        <input
+                          className="field flex-1"
+                          placeholder="Location name (e.g. Kyoto)"
+                          value={l.name}
+                          onChange={(e) => updateLocation(l.id, { name: e.target.value })}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => removeLocation(l.id)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <textarea
+                        className="field min-h-16"
+                        placeholder="Details (optional) — what you did, where you stayed…"
+                        value={l.notes}
+                        onChange={(e) => updateLocation(l.id, { notes: e.target.value })}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button type="button" className="btn btn-ghost btn-sm" onClick={addLocation}>
+                + Add location
+              </button>
+            </div>
+            <div className="sm:col-span-2">
               <label className="field-label">Notes</label>
               <textarea
                 className="field min-h-20"
@@ -265,6 +323,7 @@ export function TripsTab() {
                   ))}
                 </ul>
               )}
+              {t.locations.length > 0 && <TripLocations locations={t.locations} />}
               {t.notes && <p className="text-sm text-ink-soft mt-2">{t.notes}</p>}
               <div className="flex items-center gap-3 mt-3 text-xs">
                 <button
@@ -282,5 +341,54 @@ export function TripsTab() {
         </ul>
       )}
     </section>
+  );
+}
+
+/** Expandable sub-locations under a trip. Each row toggles open to show its details. */
+function TripLocations({ locations }: { locations: TripLocation[] }) {
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const toggle = (id: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  return (
+    <div className="mt-3 border-t border-line pt-3">
+      <p className="text-xs font-semibold text-ink-soft mb-1.5">
+        Locations · {locations.length}
+      </p>
+      <ul className="grid gap-1.5">
+        {locations.map((l) => {
+          const isOpen = open.has(l.id);
+          return (
+            <li key={l.id} className="rounded-xl border border-line bg-paper-2/60">
+              <button
+                type="button"
+                onClick={() => toggle(l.id)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left"
+                aria-expanded={isOpen}
+              >
+                <span
+                  className={`text-muted text-xs transition-transform ${isOpen ? "rotate-90" : ""}`}
+                  aria-hidden
+                >
+                  ▸
+                </span>
+                <span className="flex-1 truncate text-sm font-medium text-ink">{l.name}</span>
+                <span className="shrink-0 text-xs text-muted">{isOpen ? "Hide" : "Details"}</span>
+              </button>
+              {isOpen && (
+                <p className="px-3 pb-2.5 pl-8 text-sm text-ink-soft whitespace-pre-wrap">
+                  {l.notes || <span className="text-muted italic">No details added.</span>}
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

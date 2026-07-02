@@ -27,6 +27,7 @@ import {
   type Restaurant,
   type SportEvent,
   type Trip,
+  type TripLocation,
   type UserData,
 } from "./types";
 
@@ -94,6 +95,10 @@ function normalizeRestaurant(r: Record<string, unknown>): Restaurant {
   };
 }
 
+function normalizeTripLocation(l: Record<string, unknown>): TripLocation {
+  return { id: String(l.id), name: asStr(l.name), notes: asStr(l.notes) };
+}
+
 function normalizeTrip(t: Record<string, unknown>): Trip {
   return {
     id: String(t.id),
@@ -104,6 +109,7 @@ function normalizeTrip(t: Record<string, unknown>): Trip {
     endDate: asDate(t.endDate),
     rating: asRating(t.rating),
     highlights: asStrArr(t.highlights),
+    locations: normalizeList(t.locations, normalizeTripLocation),
     notes: asStr(t.notes),
     lat: asNum(t.lat),
     lng: asNum(t.lng),

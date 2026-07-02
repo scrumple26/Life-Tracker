@@ -1,6 +1,6 @@
 "use client";
 
-import { SPORT_EMOJI, SPORT_LABELS, type SportEvent } from "@/lib/types";
+import { sportEmoji, sportLabel, type SportEvent } from "@/lib/types";
 
 function formatDate(d: string | null) {
   if (!d) return null;
@@ -44,11 +44,11 @@ export function EventCard({
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-lg leading-none" aria-hidden>
-              {SPORT_EMOJI[e.sport]}
+              {sportEmoji(e.sport)}
             </span>
             <div className="flex flex-col">
               <span className="overline flex items-center gap-1.5">
-                {SPORT_LABELS[e.sport]}
+                {sportLabel(e.sport)}
                 {apiLinked && (
                   <span
                     className="inline-flex items-center gap-1 rounded-full bg-sage-soft px-1.5 py-0.5 text-[10px] font-bold text-sage normal-case tracking-normal"

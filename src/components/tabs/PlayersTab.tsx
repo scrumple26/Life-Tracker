@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "@/lib/data";
 import { geocode } from "@/lib/geo";
-import type { LineupEntry, PlayerInfo, Sport, SportEvent } from "@/lib/types";
+import { isSoccerSport, type LineupEntry, type PlayerInfo, type Sport, type SportEvent } from "@/lib/types";
 import { type MapMarker } from "../Map";
 import { BirthplaceMap, type GeoPoint } from "../BirthplaceMap";
 import { FetchBirthplacesButton } from "../FetchBirthplacesButton";
@@ -25,7 +25,8 @@ interface PlayerAgg {
 
 export function PlayersTab({ sport }: { sport?: Sport }) {
   const { data, saveField } = useApp();
-  const [view, setView] = useState<"map" | "list">("map");
+  const [view, setView] = useState<"map" | "list" | "countries">("map");
+  const [onlyUnlocated, setOnlyUnlocated] = useState(false);
   const states = useGeo(loadStates, true); // for "City, State, USA" labels
   const [editKey, setEditKey] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -74,8 +75,8 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
 
   // Players come from soccer lineups (the only sport with lineup data).
   const players = useMemo<PlayerAgg[]>(() => {
-    const evts = data.events.filter(
-      (e) => e.sport === "soccer" && (!sport || e.sport === sport)
+    const evts = data.events.filter((e) =>
+      sport ? e.sport === sport : isSoccerSport(e.sport)
     );
     const byKey = new Map<string, PlayerAgg>();
     const add = (p: LineupEntry, e: SportEvent, team: string, opponent: string) => {
@@ -179,6 +180,35 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
     [players, data.playerInfo]
   );
 
+  // List view can be filtered down to players we haven't pinned a birthplace for.
+  const listedPlayers = useMemo(
+    () =>
+      onlyUnlocated
+        ? players.filter((p) => {
+            const info = data.playerInfo[p.key];
+            return info?.lat == null || info?.lng == null;
+          })
+        : players,
+    [players, data.playerInfo, onlyUnlocated]
+  );
+
+  // Countries ranked by how many distinct players you've seen born there.
+  const countryRanks = useMemo(() => {
+    const byCountry = new Map<string, number>();
+    for (const p of players) {
+      const country = data.playerInfo[p.key]?.country?.trim();
+      if (!country) continue;
+      byCountry.set(country, (byCountry.get(country) ?? 0) + 1);
+    }
+    return [...byCountry.entries()]
+      .map(([country, count]) => ({ country, count }))
+      .sort((a, b) => b.count - a.count || a.country.localeCompare(b.country));
+  }, [players, data.playerInfo]);
+  const playersWithCountry = useMemo(
+    () => countryRanks.reduce((sum, r) => sum + r.count, 0),
+    [countryRanks]
+  );
+
   return (
     <section className="lf-rise">
       <h2 className="text-4xl sm:text-5xl text-ink mb-2">Players</h2>
@@ -199,7 +229,7 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
         <>
           <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
             <div className="inline-flex p-1 rounded-full bg-paper-2">
-              {(["map", "list"] as const).map((v) => (
+              {(["map", "list", "countries"] as const).map((v) => (
                 <button
                   key={v}
                   onClick={() => setView(v)}
@@ -209,18 +239,33 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
                       : "text-ink-soft hover:text-ink"
                   }`}
                 >
-                  {v === "map" ? "Birthplace map" : "List"}
+                  {v === "map" ? "Birthplace map" : v === "list" ? "List" : "Countries"}
                 </button>
               ))}
             </div>
             <FetchBirthplacesButton players={players} />
           </div>
 
-          <p className="text-xs text-muted mb-3">
-            {located} of {players.length} players located
-          </p>
+          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <p className="text-xs text-muted">
+              {located} of {players.length} players located
+            </p>
+            {view === "list" && (
+              <label className="flex items-center gap-2 text-sm text-ink-soft select-none">
+                <input
+                  type="checkbox"
+                  className="accent-[var(--color-terracotta)]"
+                  checked={onlyUnlocated}
+                  onChange={(e) => setOnlyUnlocated(e.target.checked)}
+                />
+                Only players without a birth location
+              </label>
+            )}
+          </div>
 
-          {view === "map" ? (
+          {view === "countries" ? (
+            <CountriesRanked ranks={countryRanks} totalPlayers={playersWithCountry} />
+          ) : view === "map" ? (
             markers.length > 0 ? (
               <BirthplaceMap markers={markers} points={points} />
             ) : (
@@ -232,9 +277,17 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
                 </p>
               </div>
             )
+          ) : listedPlayers.length === 0 ? (
+            <div className="card p-10 text-center">
+              <div className="text-3xl mb-2">✅</div>
+              <p className="text-ink font-semibold">Every player has a birth location</p>
+              <p className="text-sm text-muted mt-1">
+                Uncheck the filter to see all {players.length} players.
+              </p>
+            </div>
           ) : (
             <ul className="grid gap-2 sm:grid-cols-2">
-              {players.map((p) => {
+              {listedPlayers.map((p) => {
                 const info = data.playerInfo[p.key];
                 const isEditing = editKey === p.key;
                 const hasLoc = info?.lat != null && info?.lng != null;
@@ -301,5 +354,56 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
         </>
       )}
     </section>
+  );
+}
+
+/** Countries ranked by how many players you've seen who were born there. */
+function CountriesRanked({
+  ranks,
+  totalPlayers,
+}: {
+  ranks: { country: string; count: number }[];
+  totalPlayers: number;
+}) {
+  if (ranks.length === 0) {
+    return (
+      <div className="card p-10 text-center">
+        <div className="text-3xl mb-2">🏳️</div>
+        <p className="text-ink font-semibold">No countries yet</p>
+        <p className="text-sm text-muted mt-1">
+          Fetch birthplaces so each player has a country to rank.
+        </p>
+      </div>
+    );
+  }
+  const max = ranks[0].count;
+  return (
+    <div className="card p-4 sm:p-5">
+      <p className="text-xs text-muted mb-3">
+        {ranks.length} countr{ranks.length === 1 ? "y" : "ies"} · {totalPlayers} player
+        {totalPlayers === 1 ? "" : "s"} with a known country
+      </p>
+      <ol className="grid gap-1.5">
+        {ranks.map((r, i) => (
+          <li key={r.country} className="flex items-center gap-3">
+            <span className="w-6 shrink-0 text-right text-sm font-semibold text-muted tabular-nums">
+              {i + 1}
+            </span>
+            <span className="w-40 shrink-0 truncate text-sm font-medium text-ink">
+              {r.country}
+            </span>
+            <span className="relative flex-1 h-2.5 rounded-full bg-paper-2 overflow-hidden">
+              <span
+                className="absolute inset-y-0 left-0 rounded-full bg-terracotta"
+                style={{ width: `${(r.count / max) * 100}%` }}
+              />
+            </span>
+            <span className="w-10 shrink-0 text-right text-sm font-semibold text-ink tabular-nums">
+              {r.count}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }

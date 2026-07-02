@@ -1,16 +1,10 @@
 // Data shapes — mirror the legacy `lifeTrackerData/{uid}` document exactly
 // so existing Firebase data loads unchanged.
 
-export type Sport =
-  | "soccer"
-  | "basketball"
-  | "baseball"
-  | "american-football"
-  | "hockey"
-  | "tennis"
-  | "rugby"
-  | "mma"
-  | "other";
+// Sport ids are open-ended: the known ones with metadata below, their
+// `college-*` variants, plus any custom slug the user invents (e.g. "cricket").
+// Kept as a string so users can add sports that aren't in our list.
+export type Sport = string;
 
 export type Side = "home" | "away" | "neutral";
 
@@ -93,6 +87,13 @@ export interface Restaurant {
   createdAt: string;
 }
 
+// A stop/place within a trip — shown as an expandable sub-point under the trip.
+export interface TripLocation {
+  id: string;
+  name: string; // e.g. "Kyoto" or "Fushimi Inari Shrine"
+  notes: string; // details revealed when the location is expanded
+}
+
 export interface Trip {
   id: string;
   name: string;
@@ -102,6 +103,7 @@ export interface Trip {
   endDate: string | null;
   rating: number; // 0–5
   highlights: string[]; // places / stops
+  locations: TripLocation[]; // expandable sub-locations within the trip
   notes: string;
   lat: number | null;
   lng: number | null;
@@ -158,39 +160,75 @@ export const EMPTY_USER_DATA: UserData = {
   concerts: [],
 };
 
-export const SPORT_LABELS: Record<Sport, string> = {
-  soccer: "Soccer / Football",
-  basketball: "Basketball",
-  baseball: "Baseball",
-  "american-football": "American Football",
-  hockey: "Hockey",
-  tennis: "Tennis",
-  rugby: "Rugby",
-  mma: "MMA / Boxing",
-  other: "Other",
+interface SportMeta {
+  label: string; // full label, e.g. "Soccer / Football"
+  short: string; // compact label for chips/cards
+  emoji: string;
+}
+
+// Display metadata for the sports we know about (standard + college variants).
+// Anything not listed here is a custom sport and falls back to a title-cased
+// version of its id.
+const SPORT_META: Record<string, SportMeta> = {
+  soccer: { label: "Soccer / Football", short: "Soccer", emoji: "⚽" },
+  basketball: { label: "Basketball", short: "Basketball", emoji: "🏀" },
+  baseball: { label: "Baseball", short: "Baseball", emoji: "⚾" },
+  "american-football": { label: "American Football", short: "Football", emoji: "🏈" },
+  hockey: { label: "Hockey", short: "Hockey", emoji: "🏒" },
+  tennis: { label: "Tennis", short: "Tennis", emoji: "🎾" },
+  rugby: { label: "Rugby", short: "Rugby", emoji: "🏉" },
+  mma: { label: "MMA / Boxing", short: "MMA", emoji: "🥊" },
+  "college-soccer": { label: "College Soccer", short: "College Soccer", emoji: "⚽" },
+  "college-basketball": { label: "College Basketball", short: "College Hoops", emoji: "🏀" },
+  "college-baseball": { label: "College Baseball", short: "College Baseball", emoji: "⚾" },
+  "college-football": { label: "College Football", short: "College FB", emoji: "🏈" },
+  "college-hockey": { label: "College Hockey", short: "College Hockey", emoji: "🏒" },
+  other: { label: "Other", short: "Other", emoji: "🎟️" },
 };
 
-// Short labels for compact filter chips.
-export const SPORT_SHORT: Record<Sport, string> = {
-  soccer: "Soccer",
-  basketball: "Basketball",
-  baseball: "Baseball",
-  "american-football": "Football",
-  hockey: "Hockey",
-  tennis: "Tennis",
-  rugby: "Rugby",
-  mma: "MMA",
-  other: "Other",
-};
+// Offered in the "Add sport" picker, in display order. Users can also type a
+// custom sport that isn't in this list.
+export const SPORT_PRESETS: Sport[] = [
+  "soccer",
+  "basketball",
+  "american-football",
+  "baseball",
+  "hockey",
+  "tennis",
+  "rugby",
+  "mma",
+  "college-soccer",
+  "college-basketball",
+  "college-football",
+  "college-baseball",
+  "college-hockey",
+];
 
-export const SPORT_EMOJI: Record<Sport, string> = {
-  soccer: "⚽",
-  basketball: "🏀",
-  baseball: "⚾",
-  "american-football": "🏈",
-  hockey: "🏒",
-  tennis: "🎾",
-  rugby: "🏉",
-  mma: "🥊",
-  other: "🎟️",
-};
+// Order sports are shown in (grids, filters). Custom sports sort after these.
+export const SPORT_ORDER: Sport[] = [...SPORT_PRESETS, "other"];
+
+/** "college-baseball" -> "College Baseball" (for custom / unknown sports). */
+function titleCaseSport(id: string): string {
+  return id
+    .replace(/[-_]+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function sportLabel(id: Sport): string {
+  return SPORT_META[id]?.label ?? (titleCaseSport(id) || "Sport");
+}
+export function sportShort(id: Sport): string {
+  return SPORT_META[id]?.short ?? (titleCaseSport(id) || "Sport");
+}
+export function sportEmoji(id: Sport): string {
+  return SPORT_META[id]?.emoji ?? "🎽";
+}
+/** Soccer-family sports get the extra soccer-only form sections + API auto-fill. */
+export function isSoccerSport(id: Sport): boolean {
+  return id === "soccer" || id === "college-soccer";
+}
+/** Normalize free-text sport input into an id: "College Baseball" -> "college-baseball". */
+export function slugifySport(input: string): Sport {
+  return input.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+}

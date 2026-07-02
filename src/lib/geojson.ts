@@ -109,6 +109,12 @@ const COUNTRY_NORM: Record<string, string> = {
   uae: "united arab emirates",
   tanzania: "united republic of tanzania",
   "viet nam": "vietnam",
+  // Serbia: the geojson feature is named "Republic of Serbia"; player data says "Serbia".
+  "republic of serbia": "serbia",
+  // North Macedonia: the geojson feature predates the rename and is just "Macedonia".
+  "north macedonia": "macedonia",
+  "fyr macedonia": "macedonia",
+  "macedonia (fyrom)": "macedonia",
 };
 
 export function normCountry(name: string | undefined): string {
