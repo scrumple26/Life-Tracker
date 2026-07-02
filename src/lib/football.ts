@@ -211,6 +211,8 @@ interface ApiProfile {
   player: {
     id: number;
     name: string;
+    firstname: string | null;
+    lastname: string | null;
     nationality: string | null;
     birth: { date: string | null; place: string | null; country: string | null };
   };
@@ -251,9 +253,12 @@ export async function searchTeams(query: string): Promise<TeamSuggestion[]> {
 function toBirth(p: ApiProfile["player"]): PlayerBirth {
   const place = p.birth?.place ?? "";
   const country = p.birth?.country ?? "";
+  // The `name` field is abbreviated ("F. Lastname"); the true full name comes
+  // from firstname + lastname. Fall back to `name` if those are missing.
+  const fullName = [p.firstname, p.lastname].filter(Boolean).join(" ").trim();
   return {
     id: p.id,
-    name: p.name,
+    name: fullName || p.name,
     birthplace: [place, country].filter(Boolean).join(", "),
     country,
     nationality: p.nationality ?? "",

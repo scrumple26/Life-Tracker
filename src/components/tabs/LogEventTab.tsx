@@ -178,11 +178,9 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
     }
   }
 
-  function clearAutofill() {
+  function clearLineups() {
     setHomeLineup([]);
     setAwayLineup([]);
-    setScorers([]);
-    setFinderMsg(null);
   }
 
   const previews = useMemo(
@@ -659,36 +657,36 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
           </div>
         )}
 
-        {isSoccer && (homeLineup.length > 0 || awayLineup.length > 0) && (
+        {isSoccer && (
           <div>
             <div className="flex items-center justify-between">
-              <label className="field-label mb-0">Lineups (from API)</label>
-              <button
-                type="button"
-                className="text-xs text-muted hover:text-clay"
-                onClick={clearAutofill}
-              >
-                Clear auto-fill
-              </button>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-4 mt-2">
-              {([["Home", homeLineup], ["Away", awayLineup]] as const).map(
-                ([label, lu]) => (
-                  <div key={label}>
-                    <p className="text-xs font-semibold text-ink-soft mb-1.5">
-                      {label} · {lu.length}
-                    </p>
-                    <ul className="flex flex-wrap gap-1.5">
-                      {lu.map((p, i) => (
-                        <li key={i} className={`chip ${p.sub ? "opacity-60" : ""}`}>
-                          {p.name}
-                          {p.pos ? ` · ${p.pos}` : ""}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )
+              <label className="field-label mb-0">Lineups</label>
+              {(homeLineup.length > 0 || awayLineup.length > 0) && (
+                <button
+                  type="button"
+                  className="text-xs text-muted hover:text-clay"
+                  onClick={clearLineups}
+                >
+                  Clear lineups
+                </button>
               )}
+            </div>
+            <p className="text-xs text-muted mt-1 mb-2">
+              Add players yourself, or use “Find match” above to auto-fill them.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-4 mt-2">
+              <LineupEditor
+                label="Home"
+                entries={homeLineup}
+                onAdd={(entry) => setHomeLineup((a) => [...a, entry])}
+                onRemove={(i) => setHomeLineup((a) => a.filter((_, j) => j !== i))}
+              />
+              <LineupEditor
+                label="Away"
+                entries={awayLineup}
+                onAdd={(entry) => setAwayLineup((a) => [...a, entry])}
+                onRemove={(i) => setAwayLineup((a) => a.filter((_, j) => j !== i))}
+              />
             </div>
           </div>
         )}
@@ -815,5 +813,95 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
         )}
       </div>
     </section>
+  );
+}
+
+/** One side's editable lineup: add players (name, optional position, sub) and remove them. */
+function LineupEditor({
+  label,
+  entries,
+  onAdd,
+  onRemove,
+}: {
+  label: string;
+  entries: LineupEntry[];
+  onAdd: (entry: LineupEntry) => void;
+  onRemove: (index: number) => void;
+}) {
+  const [name, setName] = useState("");
+  const [pos, setPos] = useState("");
+  const [sub, setSub] = useState(false);
+
+  function add() {
+    const n = name.trim();
+    if (!n) return;
+    onAdd({ name: n, pos: pos.trim() || undefined, sub: sub || undefined });
+    setName("");
+    setPos("");
+    setSub(false);
+  }
+
+  return (
+    <div>
+      <p className="text-xs font-semibold text-ink-soft mb-1.5">
+        {label} · {entries.length}
+      </p>
+      {entries.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5 mb-2">
+          {entries.map((p, i) => (
+            <li key={i} className={`chip ${p.sub ? "opacity-60" : ""}`}>
+              {p.name}
+              {p.pos ? ` · ${p.pos}` : ""}
+              <button
+                type="button"
+                className="text-muted hover:text-clay ml-0.5"
+                onClick={() => onRemove(i)}
+                aria-label={`Remove ${p.name}`}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <input
+          className="field flex-1 min-w-32"
+          placeholder="Player name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+        />
+        <input
+          className="field w-20"
+          placeholder="Pos"
+          value={pos}
+          onChange={(e) => setPos(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+        />
+        <label className="flex items-center gap-1.5 text-xs text-ink-soft select-none">
+          <input
+            type="checkbox"
+            className="accent-[var(--color-terracotta)]"
+            checked={sub}
+            onChange={(e) => setSub(e.target.checked)}
+          />
+          Sub
+        </label>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={add}>
+          + Add
+        </button>
+      </div>
+    </div>
   );
 }

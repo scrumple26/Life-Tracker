@@ -7,6 +7,7 @@ import { isSoccerSport, type LineupEntry, type PlayerInfo, type Sport, type Spor
 import { type MapMarker } from "../Map";
 import { BirthplaceMap, type GeoPoint } from "../BirthplaceMap";
 import { FetchBirthplacesButton } from "../FetchBirthplacesButton";
+import { UpdateFullNamesButton } from "../UpdateFullNamesButton";
 import { playerKey } from "@/lib/birthplaces";
 import { loadStates, useGeo, withUsState } from "@/lib/geojson";
 
@@ -243,7 +244,10 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
                 </button>
               ))}
             </div>
-            <FetchBirthplacesButton players={players} />
+            <div className="flex items-center gap-3 flex-wrap">
+              <UpdateFullNamesButton players={players} />
+              <FetchBirthplacesButton players={players} />
+            </div>
           </div>
 
           <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
