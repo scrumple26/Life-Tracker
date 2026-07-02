@@ -10,11 +10,13 @@ import {
   sportEmoji,
   sportLabel,
   type LineupEntry,
+  type PlayerInfo,
   type Scorer,
   type Sport,
   type SportEvent,
 } from "@/lib/types";
 import type { FixtureSummary } from "@/lib/football-types";
+import { playerKey } from "@/lib/birthplaces";
 import { EventCard } from "../EventCard";
 import { TeamAutocomplete } from "../TeamAutocomplete";
 
@@ -29,7 +31,7 @@ function numOrNull(v: string): number | null {
 }
 
 export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
-  const { user, data, saveEvents } = useApp();
+  const { user, data, saveEvents, saveField } = useApp();
 
   // ── form state ──
   const [date, setDate] = useState(todayISO());
@@ -62,6 +64,9 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
   const [scMin, setScMin] = useState("");
   const [homeLineup, setHomeLineup] = useState<LineupEntry[]>([]);
   const [awayLineup, setAwayLineup] = useState<LineupEntry[]>([]);
+  // Optional "where they're from" per lineup player (keyed by playerKey);
+  // written to playerInfo (birthplaces) on save.
+  const [playerOrigins, setPlayerOrigins] = useState<Record<string, string>>({});
 
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -183,6 +188,59 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
     setAwayLineup([]);
   }
 
+  // Swap the two lineups — for when they were entered on the wrong sides.
+  // Origins are keyed by player, so they stay correct after the swap.
+  function swapLineups() {
+    setHomeLineup(awayLineup);
+    setAwayLineup(homeLineup);
+  }
+
+  function addLineupPlayer(side: "home" | "away", entry: LineupEntry, from?: string) {
+    (side === "home" ? setHomeLineup : setAwayLineup)((a) => [...a, entry]);
+    const place = from?.trim();
+    if (place) {
+      const key = playerKey({ id: entry.playerId, name: entry.name });
+      setPlayerOrigins((m) => ({ ...m, [key]: place }));
+    }
+  }
+
+  // Persist manually-entered birthplaces into playerInfo (geocoded like the
+  // Players tab), for players still present in the lineups.
+  async function saveManualOrigins() {
+    const roster = [...homeLineup, ...awayLineup];
+    const present = new Set(roster.map((p) => playerKey({ id: p.playerId, name: p.name })));
+    const entries = Object.entries(playerOrigins).filter(
+      ([key, place]) => present.has(key) && place.trim()
+    );
+    if (entries.length === 0) return;
+
+    const next: Record<string, PlayerInfo> = { ...data.playerInfo };
+    for (const [key, placeRaw] of entries) {
+      const place = placeRaw.trim();
+      const player = roster.find((p) => playerKey({ id: p.playerId, name: p.name }) === key);
+      const info: PlayerInfo = { ...(next[key] ?? {}), name: player?.name ?? next[key]?.name ?? "" };
+      info.birthplace = place;
+      const parts = place.split(",");
+      const country = parts.length > 1 ? parts[parts.length - 1].trim() : "";
+      if (country) info.country = country;
+      delete info.approx;
+      const coords = await geocode(place);
+      if (coords) {
+        info.lat = coords.lat;
+        info.lng = coords.lng;
+      } else if (country) {
+        const cc = await geocode(country);
+        if (cc) {
+          info.lat = cc.lat;
+          info.lng = cc.lng;
+          info.approx = true;
+        }
+      }
+      next[key] = info;
+    }
+    await saveField("playerInfo", next);
+  }
+
   const previews = useMemo(
     () => photos.map((f) => ({ file: f, url: URL.createObjectURL(f) })),
     [photos]
@@ -215,6 +273,7 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
     setScorers([]);
     setHomeLineup([]);
     setAwayLineup([]);
+    setPlayerOrigins({});
     setTeamQuery("");
     setCompQuery("");
     setResults([]);
@@ -318,6 +377,7 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
         ? data.events.map((ev) => (ev.id === id ? event : ev))
         : [event, ...data.events];
       await saveEvents(next);
+      await saveManualOrigins();
       resetForm();
       setStatus(isEdit ? "Updated! 🎉" : "Saved! 🎉");
       setTimeout(() => setStatus(null), 2500);
@@ -659,16 +719,26 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
 
         {isSoccer && (
           <div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <label className="field-label mb-0">Lineups</label>
               {(homeLineup.length > 0 || awayLineup.length > 0) && (
-                <button
-                  type="button"
-                  className="text-xs text-muted hover:text-clay"
-                  onClick={clearLineups}
-                >
-                  Clear lineups
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    className="text-xs text-terracotta hover:text-terracotta-dark"
+                    onClick={swapLineups}
+                    title="Swap the home and away lineups"
+                  >
+                    ⇄ Swap sides
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs text-muted hover:text-clay"
+                    onClick={clearLineups}
+                  >
+                    Clear lineups
+                  </button>
+                </div>
               )}
             </div>
             <p className="text-xs text-muted mt-1 mb-2">
@@ -678,13 +748,19 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
               <LineupEditor
                 label="Home"
                 entries={homeLineup}
-                onAdd={(entry) => setHomeLineup((a) => [...a, entry])}
+                onAdd={(entry, from) => addLineupPlayer("home", entry, from)}
+                onEdit={(i, patch) =>
+                  setHomeLineup((a) => a.map((p, j) => (j === i ? { ...p, ...patch } : p)))
+                }
                 onRemove={(i) => setHomeLineup((a) => a.filter((_, j) => j !== i))}
               />
               <LineupEditor
                 label="Away"
                 entries={awayLineup}
-                onAdd={(entry) => setAwayLineup((a) => [...a, entry])}
+                onAdd={(entry, from) => addLineupPlayer("away", entry, from)}
+                onEdit={(i, patch) =>
+                  setAwayLineup((a) => a.map((p, j) => (j === i ? { ...p, ...patch } : p)))
+                }
                 onRemove={(i) => setAwayLineup((a) => a.filter((_, j) => j !== i))}
               />
             </div>
@@ -816,29 +892,36 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
   );
 }
 
-/** One side's editable lineup: add players (name, optional position, sub) and remove them. */
+/**
+ * One side's editable lineup: add players (name, optional position, sub, and
+ * where they're from), edit an entered player's position/sub inline, or remove.
+ */
 function LineupEditor({
   label,
   entries,
   onAdd,
+  onEdit,
   onRemove,
 }: {
   label: string;
   entries: LineupEntry[];
-  onAdd: (entry: LineupEntry) => void;
+  onAdd: (entry: LineupEntry, from?: string) => void;
+  onEdit: (index: number, patch: Partial<LineupEntry>) => void;
   onRemove: (index: number) => void;
 }) {
   const [name, setName] = useState("");
   const [pos, setPos] = useState("");
   const [sub, setSub] = useState(false);
+  const [from, setFrom] = useState("");
 
   function add() {
     const n = name.trim();
     if (!n) return;
-    onAdd({ name: n, pos: pos.trim() || undefined, sub: sub || undefined });
+    onAdd({ name: n, pos: pos.trim() || undefined, sub: sub || undefined }, from);
     setName("");
     setPos("");
     setSub(false);
+    setFrom("");
   }
 
   return (
@@ -847,14 +930,34 @@ function LineupEditor({
         {label} · {entries.length}
       </p>
       {entries.length > 0 && (
-        <ul className="flex flex-wrap gap-1.5 mb-2">
+        <ul className="grid gap-1.5 mb-2">
           {entries.map((p, i) => (
-            <li key={i} className={`chip ${p.sub ? "opacity-60" : ""}`}>
-              {p.name}
-              {p.pos ? ` · ${p.pos}` : ""}
+            <li
+              key={i}
+              className={`flex items-center gap-2 rounded-lg border border-line px-2.5 py-1.5 ${
+                p.sub ? "opacity-70" : ""
+              }`}
+            >
+              <span className="flex-1 truncate text-sm text-ink">{p.name}</span>
+              <input
+                className="field h-7 w-16 px-2 text-xs"
+                placeholder="Pos"
+                value={p.pos ?? ""}
+                onChange={(e) => onEdit(i, { pos: e.target.value.trim() || undefined })}
+                aria-label={`${p.name} position`}
+              />
+              <label className="flex items-center gap-1 text-[11px] text-ink-soft select-none">
+                <input
+                  type="checkbox"
+                  className="accent-[var(--color-terracotta)]"
+                  checked={!!p.sub}
+                  onChange={(e) => onEdit(i, { sub: e.target.checked || undefined })}
+                />
+                Sub
+              </label>
               <button
                 type="button"
-                className="text-muted hover:text-clay ml-0.5"
+                className="text-muted hover:text-clay"
                 onClick={() => onRemove(i)}
                 aria-label={`Remove ${p.name}`}
               >
@@ -902,6 +1005,18 @@ function LineupEditor({
           + Add
         </button>
       </div>
+      <input
+        className="field mt-2 text-sm"
+        placeholder="Where they're from (city, country) — optional"
+        value={from}
+        onChange={(e) => setFrom(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            add();
+          }
+        }}
+      />
     </div>
   );
 }
