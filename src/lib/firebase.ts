@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore, type Firestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 // Firebase web config keys are public identifiers (security is enforced by
@@ -19,6 +19,18 @@ const firebaseConfig: FirebaseOptions = {
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+// Firestore rejects `undefined` field values. `ignoreUndefinedProperties` drops
+// them instead (matching JSON semantics), so optional fields left empty — a
+// player's position, a scorer's minute — don't break saves. The try/catch keeps
+// dev hot-reload from throwing "Firestore has already been started".
+export const db: Firestore = (() => {
+  try {
+    return initializeFirestore(app, { ignoreUndefinedProperties: true });
+  } catch {
+    return getFirestore(app);
+  }
+})();
+
 export const storage = getStorage(app);
 export default app;
