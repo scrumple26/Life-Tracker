@@ -119,6 +119,40 @@ export const COURSE_TYPES: { id: Exclude<CourseType, "">; label: string }[] = [
   { id: "biking", label: "Biking" },
 ];
 
+// Offered when tagging a landmark; users can add their own alongside these.
+export const LANDMARK_TYPES = [
+  "Bridge",
+  "Building",
+  "Monument",
+  "Museum",
+  "Park",
+  "Statue",
+  "Tower",
+  "Church / Temple",
+  "Castle / Palace",
+  "Ruins",
+  "Natural wonder",
+  "Stadium",
+  "Other",
+];
+
+// US park designations — who runs the park and what kind it is.
+export const PARK_DESIGNATIONS = [
+  "National Park",
+  "National Monument",
+  "National Recreation Area",
+  "National Seashore / Lakeshore",
+  "National Forest",
+  "National Wildlife Refuge",
+  "State Park",
+  "State Forest",
+  "State Recreation Area",
+  "Regional Park",
+  "County Park",
+  "City Park",
+  "Other",
+];
+
 /** Course types that are traced as a route on the map rather than a single pin. */
 export function isRouteType(t: CourseType): t is "hiking" | "walking" | "biking" {
   return t === "hiking" || t === "walking" || t === "biking";
@@ -129,6 +163,8 @@ export interface Place {
   name: string;
   tags: PlaceTag[];
   courseType: CourseType; // only meaningful when tags include "course"
+  landmarkTypes: string[]; // "Bridge", "Monument"… (presets + the user's own)
+  parkDesignation: string; // "State Park", "National Park"… ("" = not set)
   city: string;
   state: string; // state / province / region
   country: string;

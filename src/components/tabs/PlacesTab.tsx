@@ -3,9 +3,20 @@
 import { useMemo, useState } from "react";
 import { newId, useApp } from "@/lib/data";
 import { geocodeFirst, type GeoHit } from "@/lib/geo";
+import {
+  featureForPoint,
+  loadCountries,
+  loadStates,
+  nearestFeature,
+  normCountry,
+  useGeo,
+  type GeoCollection,
+} from "@/lib/geojson";
 import { decodePolyline, fmtMiles, pathKm } from "@/lib/route";
 import {
   COURSE_TYPES,
+  LANDMARK_TYPES,
+  PARK_DESIGNATIONS,
   PLACE_TAGS,
   isRouteType,
   type CourseType,
@@ -47,6 +58,8 @@ function emptyPlace(tag: PlaceTag, courseType: CourseType): Place {
     name: "",
     tags: [tag],
     courseType: tag === "course" ? courseType : "",
+    landmarkTypes: [],
+    parkDesignation: "",
     city: "",
     state: "",
     country: "",
@@ -93,8 +106,14 @@ export function PlacesTab({
   const [draft, setDraft] = useState<Place | null>(null);
   const [view, setView] = useState<"list" | "map">("list");
   const [filter, setFilter] = useState<CourseType | "all">("all");
+  const [typeFilter, setTypeFilter] = useState("all"); // landmark type or park designation
+  const [newType, setNewType] = useState("");
   const [busy, setBusy] = useState(false);
   const copy = COPY[tag];
+  // State/country outlines, for grouping entries whose location is only a pin.
+  const states = useGeo(loadStates, view === "list");
+  const countries = useGeo(loadCountries, view === "list");
+  const geo = { states, countries };
   const noun = courseType ? "course" : copy.noun;
 
   const tripName = (id: string) => data.trips.find((t) => t.id === id)?.name ?? "";
@@ -104,12 +123,21 @@ export function PlacesTab({
       (p) =>
         p.tags.includes(tag) &&
         (!courseType || p.courseType === courseType) &&
-        (filter === "all" || p.courseType === filter)
+        (filter === "all" || p.courseType === filter) &&
+        (typeFilter === "all" ||
+          (tag === "landmark" && p.landmarkTypes.includes(typeFilter)) ||
+          (tag === "park" && p.parkDesignation === typeFilter))
     );
     return list.sort(
       (a, b) => (b.date ?? "").localeCompare(a.date ?? "") || a.name.localeCompare(b.name)
     );
-  }, [data.places, tag, courseType, filter]);
+  }, [data.places, tag, courseType, filter, typeFilter]);
+
+  // Landmark types: the presets plus any the user has made up.
+  const allLandmarkTypes = useMemo(() => {
+    const custom = data.places.flatMap((p) => p.landmarkTypes).filter((t) => !LANDMARK_TYPES.includes(t));
+    return [...LANDMARK_TYPES, ...new Set(custom)];
+  }, [data.places]);
 
   // Course-type filter chips only for types actually present.
   const typesPresent = useMemo(() => {
@@ -123,6 +151,7 @@ export function PlacesTab({
   // already saved as a landmark by name isn't listed twice.
   const stadiums = useMemo<StadiumLandmark[]>(() => {
     if (tag !== "landmark" || courseType || !data.settings.stadiumsAsLandmarks) return [];
+    if (typeFilter !== "all" && typeFilter !== "Stadium") return [];
     const saved = new Set(shown.map((p) => p.name.trim().toLowerCase()));
     const byName = new Map<string, StadiumLandmark>();
     for (const e of data.events) {
@@ -141,7 +170,21 @@ export function PlacesTab({
     return [...byName.values()].sort(
       (a, b) => (b.lastDate ?? "").localeCompare(a.lastDate ?? "") || a.name.localeCompare(b.name)
     );
-  }, [tag, courseType, data.settings.stadiumsAsLandmarks, data.events, shown]);
+  }, [tag, courseType, typeFilter, data.settings.stadiumsAsLandmarks, data.events, shown]);
+
+  // Filter chips (landmark types / park designations) — only ones in use here.
+  const typesInUse = useMemo(() => {
+    if (courseType) return [];
+    const mine = data.places.filter((p) => p.tags.includes(tag));
+    if (tag === "park") {
+      const used = new Set(mine.map((p) => p.parkDesignation));
+      return PARK_DESIGNATIONS.filter((d) => used.has(d));
+    }
+    if (tag !== "landmark") return [];
+    const used = new Set(mine.flatMap((p) => p.landmarkTypes));
+    if (data.settings.stadiumsAsLandmarks && data.events.some((e) => e.stadium.trim())) used.add("Stadium");
+    return allLandmarkTypes.filter((t) => used.has(t));
+  }, [tag, courseType, data.places, data.events, data.settings.stadiumsAsLandmarks, allLandmarkTypes]);
 
   const markers = useMemo<MapMarker[]>(
     () => [
@@ -195,6 +238,29 @@ export function PlacesTab({
     setDraft(emptyPlace(tag, courseType ?? (filter === "all" ? "" : filter)));
   }
 
+  function toggleLandmarkType(t: string) {
+    setDraft((d) =>
+      d
+        ? {
+            ...d,
+            landmarkTypes: d.landmarkTypes.includes(t)
+              ? d.landmarkTypes.filter((x) => x !== t)
+              : [...d.landmarkTypes, t],
+          }
+        : d
+    );
+  }
+
+  function addCustomType() {
+    const t = newType.trim();
+    if (!t) return;
+    const existing = allLandmarkTypes.find((x) => x.toLowerCase() === t.toLowerCase()) ?? t;
+    setDraft((d) =>
+      d && !d.landmarkTypes.includes(existing) ? { ...d, landmarkTypes: [...d.landmarkTypes, existing] } : d
+    );
+    setNewType("");
+  }
+
   function toggleTag(t: PlaceTag) {
     if (!draft) return;
     const tags = draft.tags.includes(t) ? draft.tags.filter((x) => x !== t) : [...draft.tags, t];
@@ -214,6 +280,8 @@ export function PlacesTab({
         country: draft.country.trim(),
         notes: draft.notes.trim(),
         courseType: isCourse ? draft.courseType : "",
+        landmarkTypes: draft.tags.includes("landmark") ? draft.landmarkTypes : [],
+        parkDesignation: draft.tags.includes("park") ? draft.parkDesignation : "",
         route: isCourse && isRouteType(draft.courseType) ? draft.route : "",
         id: draft.id || newId(),
         createdAt: draft.createdAt || new Date().toISOString(),
@@ -351,6 +419,53 @@ export function PlacesTab({
               </div>
             )}
 
+            {draft.tags.includes("landmark") && !courseType && (
+              <div className="sm:col-span-2">
+                <label className="field-label">Type of landmark</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {allLandmarkTypes.map((t) => (
+                    <FilterChip key={t} active={draft.landmarkTypes.includes(t)} onClick={() => toggleLandmarkType(t)}>
+                      {t}
+                    </FilterChip>
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-2 max-w-sm">
+                  <input
+                    className="field"
+                    value={newType}
+                    placeholder="Add your own type…"
+                    onChange={(e) => setNewType(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addCustomType();
+                      }
+                    }}
+                  />
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={addCustomType}>
+                    Add
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {draft.tags.includes("park") && !courseType && (
+              <div className="sm:col-span-2">
+                <label className="field-label">Park designation</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {PARK_DESIGNATIONS.map((d) => (
+                    <FilterChip
+                      key={d}
+                      active={draft.parkDesignation === d}
+                      onClick={() => setDraft({ ...draft, parkDesignation: draft.parkDesignation === d ? "" : d })}
+                    >
+                      {d}
+                    </FilterChip>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {draft.tags.includes("course") && !courseType && (
               <div className="sm:col-span-2">
                 <label className="field-label">Kind of course / trail</label>
@@ -477,6 +592,18 @@ export function PlacesTab({
           ]}
           onChange={setView}
         />
+        {typesInUse.length > 0 && (
+          <div className="flex gap-1.5 flex-wrap">
+            <FilterChip active={typeFilter === "all"} onClick={() => setTypeFilter("all")}>
+              All
+            </FilterChip>
+            {typesInUse.map((t) => (
+              <FilterChip key={t} active={typeFilter === t} onClick={() => setTypeFilter(t)}>
+                {t}
+              </FilterChip>
+            ))}
+          </div>
+        )}
         {typesPresent.length > 1 && (
           <div className="flex gap-1.5 flex-wrap">
             <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
@@ -518,8 +645,17 @@ export function PlacesTab({
           )}
         </div>
       ) : (
-        <ul className="grid gap-2.5 sm:grid-cols-2">
-          {shown.map((p) => {
+        <LocationGroups
+          items={[
+            ...shown.map((p) => ({ id: p.id, ...whereIs(p, geo), node: renderPlace(p) })),
+            ...stadiums.map((s) => ({ id: `stadium:${s.name}`, ...whereIs(s, geo), node: renderStadium(s) })),
+          ]}
+        />
+      )}
+    </section>
+  );
+
+  function renderPlace(p: Place) {
             const km = p.route ? pathKm(decodePolyline(p.route)) : 0;
             const otherTags = PLACE_TAGS.filter((t) => t.id !== tag && p.tags.includes(t.id));
             return (
@@ -536,6 +672,15 @@ export function PlacesTab({
                   {p.rating > 0 && <Stars value={p.rating} />}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
+                  {tag === "park" && p.parkDesignation && (
+                    <span className="chip">{p.parkDesignation}</span>
+                  )}
+                  {tag === "landmark" &&
+                    p.landmarkTypes.map((t) => (
+                      <span key={t} className="chip">
+                        {t}
+                      </span>
+                    ))}
                   {p.tags.includes("course") && !courseType && (
                     <span className="chip">{courseLabel(p.courseType)}</span>
                   )}
@@ -564,8 +709,10 @@ export function PlacesTab({
                 </div>
               </li>
             );
-          })}
-          {stadiums.map((s) => (
+  }
+
+  function renderStadium(s: StadiumLandmark) {
+    return (
             <li key={`stadium:${s.name}`} className="card p-4">
               <p className="font-semibold text-ink truncate">{s.name}</p>
               <p className="text-xs text-muted">
@@ -579,9 +726,132 @@ export function PlacesTab({
               </div>
               {s.lat == null && <p className="text-xs text-muted mt-3">Not on the map</p>}
             </li>
-          ))}
-        </ul>
-      )}
-    </section>
+    );
+  }
+}
+
+// ── Grouping by country → state ─────────────────────────────────────────
+
+const NO_LOCATION = "Location not set";
+
+/**
+ * Country and state for grouping. Typed values win; otherwise the pin is
+ * looked up in the state/country outlines (stadiums from games only have a
+ * free-text address, and older places may have no state).
+ */
+function whereIs(
+  item: { lat: number | null; lng: number | null; country?: string; state?: string },
+  geo: { states: GeoCollection | null; countries: GeoCollection | null }
+): { country: string; state: string } {
+  let country = (item.country ?? "").trim();
+  let state = (item.state ?? "").trim();
+  if (item.lat != null && item.lng != null && (!country || !state)) {
+    const { lat, lng } = item;
+    const usState = geo.states ? featureForPoint(lat, lng, geo.states) : null;
+    if (usState && (!country || normCountry(country) === "usa")) {
+      country = "USA";
+      state ||= usState;
+    } else {
+      if (!country && geo.countries) country = featureForPoint(lat, lng, geo.countries) ?? "";
+      // Off every state outline (over water, an island) but not in another
+      // country: take the nearest state.
+      if ((!country || normCountry(country) === "usa") && !state && geo.states) {
+        const near = nearestFeature(lat, lng, geo.states);
+        if (near) {
+          country = "USA";
+          state = near;
+        }
+      }
+    }
+  }
+  if (normCountry(country) === "usa") country = "USA";
+  return { country: country || NO_LOCATION, state };
+}
+
+/** Countries (USA first) that each open into states; items without a state sit directly under their country. */
+function LocationGroups({
+  items,
+}: {
+  items: { id: string; country: string; state: string; node: React.ReactNode }[];
+}) {
+  const [closedCountries, setClosedCountries] = useState<Set<string>>(new Set());
+  const [openStates, setOpenStates] = useState<Set<string>>(new Set());
+  const flip = (set: Set<string>, key: string) => {
+    const next = new Set(set);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return next;
+  };
+
+  const countries = new Map<string, Map<string, typeof items>>();
+  for (const it of items) {
+    const states = countries.get(it.country) ?? new Map<string, typeof items>();
+    states.set(it.state, [...(states.get(it.state) ?? []), it]);
+    countries.set(it.country, states);
+  }
+  const rankCountry = (c: string) => (c === "USA" ? 0 : c === NO_LOCATION ? 2 : 1);
+  const countryNames = [...countries.keys()].sort(
+    (a, b) => rankCountry(a) - rankCountry(b) || a.localeCompare(b)
+  );
+
+  return (
+    <div className="grid gap-3">
+      {countryNames.map((country) => {
+        const states = countries.get(country)!;
+        const total = [...states.values()].reduce((n, l) => n + l.length, 0);
+        const open = !closedCountries.has(country);
+        const named = [...states.keys()].filter(Boolean).sort((a, b) => a.localeCompare(b));
+        const loose = states.get("") ?? [];
+        return (
+          <section key={country} className="rounded-2xl border border-line bg-paper-2/40">
+            <button
+              type="button"
+              onClick={() => setClosedCountries((s) => flip(s, country))}
+              aria-expanded={open}
+              className="w-full flex items-center gap-2 px-4 py-3 text-left"
+            >
+              <span className="flex-1 font-semibold text-ink">{country}</span>
+              <span className="text-xs text-muted">
+                {total} place{total === 1 ? "" : "s"}
+              </span>
+              <span className="text-xs text-terracotta w-10 text-right">{open ? "Hide" : "Show"}</span>
+            </button>
+            {open && (
+              <div className="px-3 pb-3 grid gap-2">
+                {named.map((state) => {
+                  const key = `${country}|${state}`;
+                  const list = states.get(state)!;
+                  const stateOpen = openStates.has(key);
+                  return (
+                    <div key={key} className="rounded-xl border border-line bg-card">
+                      <button
+                        type="button"
+                        onClick={() => setOpenStates((s) => flip(s, key))}
+                        aria-expanded={stateOpen}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 text-left"
+                      >
+                        <span className="flex-1 text-sm font-medium text-ink">{state}</span>
+                        <span className="text-xs text-muted">{list.length}</span>
+                        <span className="text-xs text-terracotta w-10 text-right">
+                          {stateOpen ? "Hide" : "Open"}
+                        </span>
+                      </button>
+                      {stateOpen && (
+                        <ul className="grid gap-2.5 sm:grid-cols-2 px-2.5 pb-2.5">
+                          {list.map((it) => it.node)}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
+                {loose.length > 0 && (
+                  <ul className="grid gap-2.5 sm:grid-cols-2">{loose.map((it) => it.node)}</ul>
+                )}
+              </div>
+            )}
+          </section>
+        );
+      })}
+    </div>
   );
 }

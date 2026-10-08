@@ -78,6 +78,32 @@ export function featureForPoint(
   return null;
 }
 
+// Closest feature by outline vertex, within `maxKm`. For pins just outside
+// every polygon — bridges over water, islands, coastal spots the simplified
+// outlines miss (the Golden Gate Bridge sits outside California's shape).
+export function nearestFeature(
+  lat: number,
+  lng: number,
+  geo: GeoCollection,
+  maxKm = 30
+): string | null {
+  const kx = 111 * Math.cos((lat * Math.PI) / 180); // km per degree of longitude here
+  let best: string | null = null;
+  let bestD2 = maxKm * maxKm;
+  for (const f of geo.features) {
+    const polys = f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates;
+    for (const poly of polys)
+      for (const [x, y] of poly[0]) {
+        const d2 = ((x - lng) * kx) ** 2 + ((y - lat) * 111) ** 2;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          best = f.properties.name;
+        }
+      }
+  }
+  return best;
+}
+
 // ── Country name normalisation -> names used in countries.geojson ──
 const COUNTRY_NORM: Record<string, string> = {
   "united states": "usa",

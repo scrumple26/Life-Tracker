@@ -118,6 +118,8 @@ function normalizePlace(p: Record<string, unknown>): Place {
     name: asStr(p.name),
     tags: asStrArr(p.tags).filter((t): t is PlaceTag => PLACE_TAG_IDS.has(t)),
     courseType: (COURSE_TYPE_IDS.has(asStr(p.courseType)) ? asStr(p.courseType) : "") as CourseType,
+    landmarkTypes: asStrArr(p.landmarkTypes),
+    parkDesignation: asStr(p.parkDesignation),
     city: asStr(p.city),
     state: asStr(p.state),
     country: asStr(p.country),

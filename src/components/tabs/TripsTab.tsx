@@ -112,6 +112,8 @@ export function TripsTab() {
             name: l.name,
             tags,
             courseType: "",
+            landmarkTypes: [],
+            parkDesignation: "",
             city: trip.city,
             state: "",
             country: trip.country,
