@@ -66,8 +66,9 @@ export async function GET(request: Request) {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
         q
-      )}&format=json&limit=${Math.max(limit, 5)}&addressdetails=1`,
-      { headers: { "User-Agent": USER_AGENT, Accept: "application/json" } }
+      )}&format=json&limit=${Math.max(limit, 5)}&addressdetails=1&accept-language=en`,
+      // English names — otherwise Kyoto comes back as "京都市, 京都府, 日本".
+      { headers: { "User-Agent": USER_AGENT, Accept: "application/json", "Accept-Language": "en" } }
     );
     if (!res.ok) {
       return Response.json({ error: `Geocoder returned ${res.status}` }, { status: 502 });
