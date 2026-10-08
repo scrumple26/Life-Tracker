@@ -9,7 +9,7 @@ import { BirthplaceMap, type GeoPoint } from "../BirthplaceMap";
 import { FetchBirthplacesButton } from "../FetchBirthplacesButton";
 import { UpdateFullNamesButton } from "../UpdateFullNamesButton";
 import { playerKey } from "@/lib/birthplaces";
-import { loadStates, useGeo, withUsState } from "@/lib/geojson";
+import { loadStates, normCountry, useGeo, withUsState } from "@/lib/geojson";
 
 interface Appearance {
   eventId: string;
@@ -28,7 +28,9 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
   const { data, saveField } = useApp();
   const [view, setView] = useState<"map" | "list" | "countries">("map");
   const [onlyUnlocated, setOnlyUnlocated] = useState(false);
+  const [gamesOpen, setGamesOpen] = useState<string | null>(null); // player key
   const states = useGeo(loadStates, true); // for "City, State, USA" labels
+  const eventsById = useMemo(() => new Map(data.events.map((e) => [e.id, e])), [data.events]);
   const [editKey, setEditKey] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -194,17 +196,30 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
   );
 
   // Countries ranked by how many distinct players you've seen born there.
-  const countryRanks = useMemo(() => {
-    const byCountry = new Map<string, number>();
+  // Spellings of the same country ("USA" / "United States") count as one, so
+  // this list and the birthplace map's country count agree.
+  const countryRanks = useMemo<CountryRank[]>(() => {
+    const byCountry = new Map<string, CountryRank>();
     for (const p of players) {
-      const country = data.playerInfo[p.key]?.country?.trim();
+      const info = data.playerInfo[p.key];
+      const country = info?.country?.trim();
       if (!country) continue;
-      byCountry.set(country, (byCountry.get(country) ?? 0) + 1);
+      const key = normCountry(country);
+      const r = byCountry.get(key) ?? { country, count: 0, players: [] };
+      r.count += 1;
+      r.players.push({
+        key: p.key,
+        name: info?.name || p.name,
+        birthplace: info?.birthplace ?? "",
+        apps: p.apps.length,
+      });
+      byCountry.set(key, r);
     }
-    return [...byCountry.entries()]
-      .map(([country, count]) => ({ country, count }))
+    return [...byCountry.values()]
+      .map((r) => ({ ...r, players: r.players.sort((a, b) => b.apps - a.apps || a.name.localeCompare(b.name)) }))
       .sort((a, b) => b.count - a.count || a.country.localeCompare(b.country));
   }, [players, data.playerInfo]);
+  const countryNames = useMemo(() => countryRanks.map((r) => r.country), [countryRanks]);
   const playersWithCountry = useMemo(
     () => countryRanks.reduce((sum, r) => sum + r.count, 0),
     [countryRanks]
@@ -270,7 +285,7 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
             <CountriesRanked ranks={countryRanks} totalPlayers={playersWithCountry} />
           ) : view === "map" ? (
             markers.length > 0 ? (
-              <BirthplaceMap markers={markers} points={points} />
+              <BirthplaceMap markers={markers} points={points} countries={countryNames} />
             ) : (
               <div className="card p-10 text-center">
                 <p className="text-ink font-semibold">No birthplaces yet</p>
@@ -306,9 +321,15 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="chip">
+                        <button
+                          type="button"
+                          className="chip hover:border-terracotta hover:text-terracotta transition"
+                          aria-expanded={gamesOpen === p.key}
+                          onClick={() => setGamesOpen(gamesOpen === p.key ? null : p.key)}
+                        >
                           {p.apps.length} game{p.apps.length === 1 ? "" : "s"}
-                        </span>
+                          {gamesOpen === p.key ? " · hide" : ""}
+                        </button>
                         {!isEditing && (
                           <button
                             className="text-xs text-terracotta hover:text-terracotta-dark"
@@ -322,6 +343,38 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
                         )}
                       </div>
                     </div>
+                    {gamesOpen === p.key && (
+                      <ul className="mt-2.5 grid gap-1 border-t border-line pt-2.5">
+                        {[...p.apps]
+                          .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
+                          .map((a) => {
+                            const e = eventsById.get(a.eventId);
+                            const isHome = e ? e.homeTeam === a.team : true;
+                            const mine = isHome ? e?.homeScore : e?.awayScore;
+                            const theirs = isHome ? e?.awayScore : e?.homeScore;
+                            return (
+                              <li key={a.eventId}>
+                                <a
+                                  href={`#log-event-${a.eventId}`}
+                                  className="flex items-baseline gap-2 rounded-lg px-2 py-1 text-xs hover:bg-paper-2"
+                                >
+                                  <span className="w-20 shrink-0 text-muted tabular-nums">
+                                    {a.date ?? "Date unknown"}
+                                  </span>
+                                  <span className="flex-1 truncate text-ink">
+                                    {a.team} {isHome ? "vs" : "at"} {a.opponent}
+                                  </span>
+                                  {mine != null && theirs != null && (
+                                    <span className="shrink-0 font-semibold text-ink tabular-nums">
+                                      {mine}–{theirs}
+                                    </span>
+                                  )}
+                                </a>
+                              </li>
+                            );
+                          })}
+                      </ul>
+                    )}
                     {isEditing && (
                       <div className="flex gap-2 mt-3">
                         <input
@@ -358,14 +411,21 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
   );
 }
 
-/** Countries ranked by how many players you've seen who were born there. */
+interface CountryRank {
+  country: string;
+  count: number;
+  players: { key: string; name: string; birthplace: string; apps: number }[];
+}
+
+/** Countries ranked by how many players you've seen who were born there. Tap one to see them. */
 function CountriesRanked({
   ranks,
   totalPlayers,
 }: {
-  ranks: { country: string; count: number }[];
+  ranks: CountryRank[];
   totalPlayers: number;
 }) {
+  const [open, setOpen] = useState<string | null>(null);
   if (ranks.length === 0) {
     return (
       <div className="card p-10 text-center">
@@ -385,22 +445,43 @@ function CountriesRanked({
       </p>
       <ol className="grid gap-1.5">
         {ranks.map((r, i) => (
-          <li key={r.country} className="flex items-center gap-3">
-            <span className="w-6 shrink-0 text-right text-sm font-semibold text-muted tabular-nums">
-              {i + 1}
-            </span>
-            <span className="w-40 shrink-0 truncate text-sm font-medium text-ink">
-              {r.country}
-            </span>
-            <span className="relative flex-1 h-2.5 rounded-full bg-paper-2 overflow-hidden">
-              <span
-                className="absolute inset-y-0 left-0 rounded-full bg-terracotta"
-                style={{ width: `${(r.count / max) * 100}%` }}
-              />
-            </span>
-            <span className="w-10 shrink-0 text-right text-sm font-semibold text-ink tabular-nums">
-              {r.count}
-            </span>
+          <li key={r.country}>
+            <button
+              type="button"
+              onClick={() => setOpen(open === r.country ? null : r.country)}
+              aria-expanded={open === r.country}
+              className="w-full flex items-center gap-3 rounded-lg px-1 py-1 text-left hover:bg-paper-2"
+            >
+              <span className="w-6 shrink-0 text-right text-sm font-semibold text-muted tabular-nums">
+                {i + 1}
+              </span>
+              <span className="w-28 sm:w-40 shrink-0 truncate text-sm font-medium text-ink">
+                {r.country}
+              </span>
+              <span className="relative flex-1 h-2.5 rounded-full bg-paper-2 overflow-hidden">
+                <span
+                  className="absolute inset-y-0 left-0 rounded-full bg-terracotta"
+                  style={{ width: `${(r.count / max) * 100}%` }}
+                />
+              </span>
+              <span className="w-10 shrink-0 text-right text-sm font-semibold text-ink tabular-nums">
+                {r.count}
+              </span>
+            </button>
+            {open === r.country && (
+              <ul className="ml-9 mt-1 mb-2 grid gap-1 sm:grid-cols-2">
+                {r.players.map((p) => (
+                  <li key={p.key} className="rounded-lg border border-line bg-card px-3 py-2">
+                    <p className="text-sm font-medium text-ink truncate">{p.name}</p>
+                    <p className="text-xs text-muted truncate">
+                      {[p.birthplace, `${p.apps} game${p.apps === 1 ? "" : "s"} seen`]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
           </li>
         ))}
       </ol>
