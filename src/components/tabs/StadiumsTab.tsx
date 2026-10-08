@@ -1,14 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/lib/data";
+import { geocodeFirst, venueQueries } from "@/lib/geo";
 import { type Sport } from "@/lib/types";
 import { MapPanel, type MapMarker } from "../Map";
 import { EventCard } from "../EventCard";
 
 export function StadiumsTab({ sport }: { sport?: Sport }) {
-  const { data } = useApp();
+  const { data, saveEvents } = useApp();
   const [year, setYear] = useState<string>("");
+  const [locating, setLocating] = useState<{ text: string; busy: boolean } | null>(null);
+  const latest = useRef(data.events);
+  useEffect(() => {
+    latest.current = data.events;
+  }, [data.events]);
 
   const years = useMemo(() => {
     const set = new Set<string>();
@@ -52,6 +58,41 @@ export function StadiumsTab({ sport }: { sport?: Sport }) {
   }, [filtered]);
 
   const venueCount = markers.length;
+
+  // Events with a venue but no pin (logged before the geocoder fix, or the
+  // lookup failed at the time).
+  const unlocated = useMemo(
+    () => filtered.filter((e) => e.lat == null && (e.stadium.trim() || e.address.trim())),
+    [filtered]
+  );
+
+  async function locateMissing() {
+    const found = new Map<string, { lat: number; lng: number }>();
+    const byVenue = new Map<string, { lat: number; lng: number } | null>();
+    for (let i = 0; i < unlocated.length; i++) {
+      const e = unlocated[i];
+      setLocating({ text: `Locating ${i + 1} of ${unlocated.length}…`, busy: true });
+      const key = `${e.stadium}|${e.address}`.toLowerCase();
+      let coords = byVenue.get(key);
+      if (coords === undefined) {
+        coords = await geocodeFirst(venueQueries(e.stadium, e.address));
+        byVenue.set(key, coords);
+        await new Promise((r) => setTimeout(r, 1100)); // Nominatim: ~1 req/sec
+      }
+      if (coords) found.set(e.id, coords);
+    }
+    if (found.size) {
+      await saveEvents(
+        latest.current.map((e) => (found.has(e.id) ? { ...e, ...found.get(e.id)! } : e))
+      );
+    }
+    setLocating({
+      text: `Placed ${found.size} of ${unlocated.length}.${
+        found.size < unlocated.length ? " Edit the rest to add a city or address." : ""
+      }`,
+      busy: false,
+    });
+  }
   const sorted = useMemo(
     () =>
       [...filtered].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")),
@@ -78,11 +119,19 @@ export function StadiumsTab({ sport }: { sport?: Sport }) {
       </div>
 
       <div className="card p-3 sm:p-4 mb-3">
-        <div className="flex items-center justify-between px-1 pb-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap px-1 pb-2">
           <span className="overline">Stadium map</span>
-          <span className="text-xs text-muted">
-            {venueCount} venue{venueCount === 1 ? "" : "s"}
-          </span>
+          <div className="flex items-center gap-3">
+            {locating && <span className="text-xs text-muted">{locating.text}</span>}
+            {unlocated.length > 0 && !locating?.busy && (
+              <button className="btn btn-ghost btn-sm" onClick={locateMissing}>
+                Locate {unlocated.length} missing
+              </button>
+            )}
+            <span className="text-xs text-muted">
+              {venueCount} venue{venueCount === 1 ? "" : "s"}
+            </span>
+          </div>
         </div>
         {markers.length > 0 ? (
           <MapPanel markers={markers} />

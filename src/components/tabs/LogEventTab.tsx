@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "@/lib/firebase";
 import { newId, useApp } from "@/lib/data";
-import { geocode } from "@/lib/geo";
+import { geocode, geocodeFirst, venueQueries } from "@/lib/geo";
 import {
   isSoccerSport,
   sportEmoji,
@@ -331,20 +331,28 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
         );
       }
 
-      // Best-effort geocode for the maps later
+      const existing = isEdit ? data.events.find((ev) => ev.id === id) : undefined;
+
+      // Best-effort geocode for the maps. An edit that leaves the venue alone
+      // keeps its pin, so a flaky lookup can't wipe a location that worked.
       let lat: number | null = null;
       let lng: number | null = null;
-      const locQuery = [stadium, address].filter(Boolean).join(", ");
-      if (locQuery) {
+      const venueUnchanged =
+        existing != null &&
+        existing.stadium === stadium.trim() &&
+        existing.address === address.trim() &&
+        existing.lat != null;
+      if (venueUnchanged) {
+        lat = existing.lat;
+        lng = existing.lng;
+      } else if (stadium.trim() || address.trim()) {
         setStatus("Locating venue…");
-        const coords = await geocode(locQuery);
+        const coords = await geocodeFirst(venueQueries(stadium, address));
         if (coords) {
           lat = coords.lat;
           lng = coords.lng;
         }
       }
-
-      const existing = isEdit ? data.events.find((ev) => ev.id === id) : undefined;
 
       const event: SportEvent = {
         id,
