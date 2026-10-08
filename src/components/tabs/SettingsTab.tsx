@@ -18,7 +18,7 @@ export function SettingsTab() {
     <section className="lf-rise">
       <h2 className="text-4xl sm:text-5xl text-ink mb-2">Settings</h2>
       <p className="text-ink-soft mb-6 text-[15px]">
-        Choose what shows up in the menu. Hiding something only removes it from the
+        Choose what shows up in the menu and how things are listed. Hiding something only removes it from the
         menu — anything you&apos;ve logged there stays saved.
       </p>
 
@@ -41,6 +41,28 @@ export function SettingsTab() {
             </ul>
           </div>
         ))}
+
+        <div className="card p-5">
+          <p className="overline mb-3">Landmarks</p>
+          <label className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-paper-2 cursor-pointer">
+            <span className="flex-1">
+              <span className="block text-sm font-medium text-ink">Count stadiums as landmarks</span>
+              <span className="block text-xs text-muted">
+                Venues from your logged games also appear under Landmarks.
+              </span>
+            </span>
+            <Switch
+              on={data.settings.stadiumsAsLandmarks}
+              label="stadiums as landmarks"
+              onChange={() =>
+                saveField("settings", {
+                  ...data.settings,
+                  stadiumsAsLandmarks: !data.settings.stadiumsAsLandmarks,
+                })
+              }
+            />
+          </label>
+        </div>
       </div>
     </section>
   );

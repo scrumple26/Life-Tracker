@@ -61,6 +61,15 @@ function emptyPlace(tag: PlaceTag, courseType: CourseType): Place {
   };
 }
 
+interface StadiumLandmark {
+  name: string;
+  address: string;
+  games: number;
+  lastDate: string | null;
+  lat: number | null;
+  lng: number | null;
+}
+
 function courseLabel(t: CourseType): string {
   const c = COURSE_TYPES.find((x) => x.id === t);
   return c ? c.label : "Course / trail";
@@ -109,9 +118,34 @@ export function PlacesTab({
     return COURSE_TYPES.filter((t) => have.has(t.id));
   }, [data.places, tag, courseType]);
 
+  // With "Count stadiums as landmarks" on, venues from logged games join the
+  // Landmarks list (read-only — they're edited through their games). A venue
+  // already saved as a landmark by name isn't listed twice.
+  const stadiums = useMemo<StadiumLandmark[]>(() => {
+    if (tag !== "landmark" || courseType || !data.settings.stadiumsAsLandmarks) return [];
+    const saved = new Set(shown.map((p) => p.name.trim().toLowerCase()));
+    const byName = new Map<string, StadiumLandmark>();
+    for (const e of data.events) {
+      const name = e.stadium.trim();
+      if (!name || saved.has(name.toLowerCase())) continue;
+      const key = name.toLowerCase();
+      const s =
+        byName.get(key) ??
+        { name, address: e.address, games: 0, lastDate: null, lat: null, lng: null };
+      s.games += 1;
+      if (e.date && (!s.lastDate || e.date > s.lastDate)) s.lastDate = e.date;
+      if (s.lat == null && e.lat != null && e.lng != null) Object.assign(s, { lat: e.lat, lng: e.lng });
+      if (!s.address) s.address = e.address;
+      byName.set(key, s);
+    }
+    return [...byName.values()].sort(
+      (a, b) => (b.lastDate ?? "").localeCompare(a.lastDate ?? "") || a.name.localeCompare(b.name)
+    );
+  }, [tag, courseType, data.settings.stadiumsAsLandmarks, data.events, shown]);
+
   const markers = useMemo<MapMarker[]>(
-    () =>
-      shown
+    () => [
+      ...shown
         .filter((p) => p.lat != null && p.lng != null && !p.route)
         .map((p) => ({
           id: p.id,
@@ -125,7 +159,18 @@ export function PlacesTab({
             [p.city, p.state, p.country].filter(Boolean).join(", "),
           ].filter(Boolean),
         })),
-    [shown]
+      ...stadiums
+        .filter((s) => s.lat != null && s.lng != null)
+        .map((s) => ({
+          id: `stadium:${s.name}`,
+          lat: s.lat as number,
+          lng: s.lng as number,
+          title: s.name,
+          count: 1,
+          lines: ["Stadium", `${s.games} game${s.games === 1 ? "" : "s"}`],
+        })),
+    ],
+    [shown, stadiums]
   );
 
   const paths = useMemo<MapPath[]>(
@@ -446,7 +491,7 @@ export function PlacesTab({
         )}
       </div>
 
-      {shown.length === 0 ? (
+      {shown.length === 0 && stadiums.length === 0 ? (
         <div className="card p-10 text-center">
           <p className="text-ink font-semibold">Nothing here yet</p>
           <p className="text-sm text-muted mt-1">
@@ -520,6 +565,21 @@ export function PlacesTab({
               </li>
             );
           })}
+          {stadiums.map((s) => (
+            <li key={`stadium:${s.name}`} className="card p-4">
+              <p className="font-semibold text-ink truncate">{s.name}</p>
+              <p className="text-xs text-muted">
+                {[s.address, s.lastDate && `last visit ${s.lastDate}`].filter(Boolean).join(" · ")}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <span className="chip">Stadium</span>
+                <span className="chip">
+                  {s.games} game{s.games === 1 ? "" : "s"}
+                </span>
+              </div>
+              {s.lat == null && <p className="text-xs text-muted mt-3">Not on the map</p>}
+            </li>
+          ))}
         </ul>
       )}
     </section>
