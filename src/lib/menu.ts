@@ -28,7 +28,7 @@ export const MENU = [
 
 export type MenuGroup = (typeof MENU)[number];
 export type MenuItemId = MenuGroup["items"][number]["id"];
-export type ScreenId = MenuItemId | "settings";
+export type ScreenId = MenuItemId | "wishlist" | "settings";
 
 export function visibleMenu(hidden: string[]) {
   const off = new Set(hidden);

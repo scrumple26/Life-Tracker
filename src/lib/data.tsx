@@ -31,6 +31,8 @@ import {
   type PlaceTag,
   type PlayerInfo,
   type Settings,
+  type WishCategory,
+  type WishItem,
   type RestCategory,
   type Restaurant,
   type SportEvent,
@@ -158,6 +160,36 @@ function normalizeOtherEvent(o: Record<string, unknown>): OtherEvent {
     rating: asRating(o.rating),
     notes: asStr(o.notes),
     createdAt: asStr(o.createdAt) || new Date().toISOString(),
+  };
+}
+
+const WISH_CATEGORY_IDS = new Set<string>([
+  "travel",
+  "landmarks",
+  "parks",
+  "courses",
+  "sports",
+  "restaurants",
+  "events",
+]);
+
+function normalizeWish(w: Record<string, unknown>): WishItem {
+  return {
+    id: String(w.id),
+    category: (WISH_CATEGORY_IDS.has(asStr(w.category)) ? asStr(w.category) : "travel") as WishCategory,
+    kind: asStr(w.kind),
+    sport: asStr(w.sport),
+    name: asStr(w.name),
+    city: asStr(w.city),
+    state: asStr(w.state),
+    country: asStr(w.country),
+    lat: asNum(w.lat),
+    lng: asNum(w.lng),
+    notes: asStr(w.notes),
+    topPick: w.topPick === true,
+    done: w.done === true,
+    doneDate: asDate(w.doneDate),
+    createdAt: asStr(w.createdAt) || new Date().toISOString(),
   };
 }
 
@@ -290,6 +322,7 @@ function normalizeData(raw: Record<string, unknown> | undefined): UserData {
     places: normalizeList(raw.places, normalizePlace),
     movies: normalizeList(raw.movies, normalizeMovie),
     otherEvents: normalizeList(raw.otherEvents, normalizeOtherEvent),
+    wishlist: normalizeList(raw.wishlist, normalizeWish),
     settings: normalizeSettings(raw.settings),
   };
 }

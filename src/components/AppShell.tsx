@@ -26,6 +26,7 @@ import { MoviesTab } from "./tabs/MoviesTab";
 import { OtherEventsTab } from "./tabs/OtherEventsTab";
 import { PlacesTab } from "./tabs/PlacesTab";
 import { SettingsTab } from "./tabs/SettingsTab";
+import { WishlistTab } from "./tabs/WishlistTab";
 
 const SPORT_TABS = [
   { id: "log", label: "Log Event" },
@@ -56,8 +57,13 @@ export function AppShell() {
   const menu = useMemo(() => visibleMenu(data.settings.hiddenMenu), [data.settings.hiddenMenu]);
   // If the open screen gets switched off in Settings, fall back to the first one left.
   const visibleIds = menu.flatMap((g) => g.items.map((i) => i.id as MenuItemId));
+  const wishlistOn = !data.settings.hiddenMenu.includes("wishlist");
   const tab: ScreenId =
-    screen === "settings" || visibleIds.includes(screen) ? screen : (visibleIds[0] ?? "settings");
+    screen === "settings" ||
+    (screen === "wishlist" && wishlistOn) ||
+    visibleIds.includes(screen as MenuItemId)
+      ? screen
+      : (visibleIds[0] ?? (wishlistOn ? "wishlist" : "settings"));
 
   // Sports the user has actually logged, in display order (custom sports last).
   // Golf & disc golf count courses played rather than games.
@@ -119,6 +125,12 @@ export function AppShell() {
             <span className="hidden sm:inline text-sm text-muted max-w-[180px] truncate">
               {user?.email}
             </span>
+            <button
+              onClick={() => setScreen("settings")}
+              className={`btn btn-sm ${tab === "settings" ? "btn-primary" : "btn-ghost"}`}
+            >
+              Settings
+            </button>
             <button onClick={() => signOutUser()} className="btn btn-ghost btn-sm">
               Sign Out
             </button>
@@ -141,16 +153,18 @@ export function AppShell() {
                 }}
               />
             ))}
-            <button
-              onClick={() => setScreen("settings")}
-              className={`ml-auto shrink-0 px-3.5 py-1.5 rounded-full text-sm font-semibold transition ${
-                tab === "settings"
-                  ? "bg-terracotta text-white"
-                  : "text-ink-soft hover:bg-paper-2 hover:text-ink"
-              }`}
-            >
-              Settings
-            </button>
+            {wishlistOn && (
+              <button
+                onClick={() => setScreen("wishlist")}
+                className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-semibold transition ${
+                  tab === "wishlist"
+                    ? "bg-terracotta text-white shadow-[0_6px_14px_rgba(60,110,71,0.28)]"
+                    : "text-ink-soft hover:bg-paper-2 hover:text-ink"
+                }`}
+              >
+                Wishlist
+              </button>
+            )}
           </div>
         </nav>
       </header>
@@ -224,6 +238,7 @@ export function AppShell() {
         {tab === "parks" && <PlacesTab key="parks" tag="park" />}
         {tab === "restaurants" && <RestaurantsTab />}
         {tab === "vacation" && <TripsTab />}
+        {tab === "wishlist" && <WishlistTab />}
         {tab === "settings" && <SettingsTab />}
       </main>
     </div>

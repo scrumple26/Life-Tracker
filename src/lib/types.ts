@@ -219,6 +219,34 @@ export function teamKey(name: string): string {
   return name.toLowerCase().trim();
 }
 
+// ── Wishlist ─────────────────────────────────────────────────────────────
+export type WishCategory =
+  | "travel"
+  | "landmarks"
+  | "parks"
+  | "courses"
+  | "sports"
+  | "restaurants"
+  | "events";
+
+export interface WishItem {
+  id: string;
+  category: WishCategory;
+  kind: string; // per-category type: "City", "Bridge", "State Park", "Stadium"…
+  sport: string; // sports only: "Baseball", "Soccer"… as typed/picked
+  name: string;
+  city: string;
+  state: string;
+  country: string;
+  lat: number | null;
+  lng: number | null;
+  notes: string;
+  topPick: boolean; // sorts first
+  done: boolean;
+  doneDate: string | null; // YYYY-MM-DD
+  createdAt: string;
+}
+
 // ── Settings ─────────────────────────────────────────────────────────────
 export interface Settings {
   hiddenMenu: string[]; // MenuItemId values switched off in Settings
@@ -281,6 +309,7 @@ export interface UserData {
   places: Place[];
   movies: Movie[];
   otherEvents: OtherEvent[];
+  wishlist: WishItem[];
   settings: Settings;
 }
 
@@ -296,6 +325,7 @@ export const EMPTY_USER_DATA: UserData = {
   places: [],
   movies: [],
   otherEvents: [],
+  wishlist: [],
   settings: { hiddenMenu: [], stadiumsAsLandmarks: false },
 };
 

@@ -7,7 +7,7 @@ export function SettingsTab() {
   const { data, saveField } = useApp();
   const hidden = new Set(data.settings.hiddenMenu);
 
-  async function toggle(id: MenuItemId) {
+  async function toggle(id: MenuItemId | "wishlist") {
     const next = new Set(hidden);
     if (next.has(id)) next.delete(id);
     else next.add(id);
@@ -41,6 +41,14 @@ export function SettingsTab() {
             </ul>
           </div>
         ))}
+
+        <div className="card p-5">
+          <p className="overline mb-3">Wishlist</p>
+          <label className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-paper-2 cursor-pointer">
+            <span className="flex-1 text-sm font-medium text-ink">Wishlist</span>
+            <Switch on={!hidden.has("wishlist")} onChange={() => toggle("wishlist")} label="Wishlist" />
+          </label>
+        </div>
 
         <div className="card p-5">
           <p className="overline mb-3">Landmarks</p>
