@@ -1,8 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { MapMarker } from "./MapView";
-import type { GeoCollection } from "@/lib/geojson";
+import type { ComponentProps } from "react";
+import type { MapMarker, MapPath } from "./MapView";
+import type MapViewType from "./MapView";
 
 const MapView = dynamic(() => import("./MapView"), {
   ssr: false,
@@ -14,21 +15,14 @@ const MapView = dynamic(() => import("./MapView"), {
 });
 
 export function MapPanel({
-  markers,
-  overlays,
-  showMarkers = true,
   className = "h-[420px]",
-}: {
-  markers: MapMarker[];
-  overlays?: GeoCollection[];
-  showMarkers?: boolean;
-  className?: string;
-}) {
+  ...props
+}: ComponentProps<typeof MapViewType>) {
   return (
     <div className={className}>
-      <MapView markers={markers} overlays={overlays} showMarkers={showMarkers} />
+      <MapView {...props} />
     </div>
   );
 }
 
-export type { MapMarker };
+export type { MapMarker, MapPath };

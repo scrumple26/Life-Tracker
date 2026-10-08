@@ -3,8 +3,18 @@
 import { useEffect } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  GeoJSON,
+  Polyline,
+  useMap,
+  useMapEvents,
+} from "react-leaflet";
 import type { GeoCollection } from "@/lib/geojson";
+import type { LatLng } from "@/lib/types";
 
 export interface PopupRow {
   text: string;
@@ -41,18 +51,42 @@ function pinIcon(count?: number) {
   });
 }
 
-function FitBounds({ markers }: { markers: MapMarker[] }) {
+function FitBounds({ markers, paths }: { markers: MapMarker[]; paths?: MapPath[] }) {
   const map = useMap();
   useEffect(() => {
-    if (!markers.length) return;
-    if (markers.length === 1) {
-      map.setView([markers[0].lat, markers[0].lng], 9);
+    const pts: [number, number][] = [
+      ...markers.map((m) => [m.lat, m.lng] as [number, number]),
+      ...(paths ?? []).flatMap((p) => p.points.map((q) => [q.lat, q.lng] as [number, number])),
+    ];
+    if (!pts.length) return;
+    if (pts.length === 1) {
+      map.setView(pts[0], 9);
       return;
     }
-    const bounds = L.latLngBounds(markers.map((m) => [m.lat, m.lng] as [number, number]));
-    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 11 });
-  }, [map, markers]);
+    map.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: paths?.length ? 15 : 11 });
+  }, [map, markers, paths]);
   return null;
+}
+
+// Pans/zooms when `target` changes (e.g. a search result was picked).
+function FlyTo({ target }: { target: LatLng & { zoom: number } }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView([target.lat, target.lng], target.zoom);
+  }, [map, target]);
+  return null;
+}
+
+function ClickHandler({ onClick }: { onClick: (ll: LatLng) => void }) {
+  useMapEvents({ click: (e) => onClick({ lat: e.latlng.lat, lng: e.latlng.lng }) });
+  return null;
+}
+
+export interface MapPath {
+  id: string;
+  points: LatLng[];
+  color?: string;
+  title?: string; // popup label
 }
 
 const HIGHLIGHT_STYLE = {
@@ -68,19 +102,32 @@ export default function MapView({
   overlays,
   showMarkers = true,
   className = "",
+  paths,
+  onMapClick,
+  autoFit = true,
+  initialCenter,
+  focus,
 }: {
   markers: MapMarker[];
   overlays?: GeoCollection[];
   showMarkers?: boolean;
   className?: string;
+  paths?: MapPath[];
+  onMapClick?: (ll: LatLng) => void;
+  autoFit?: boolean; // editors turn this off so the view doesn't jump on every click
+  initialCenter?: LatLng & { zoom: number };
+  focus?: (LatLng & { zoom: number }) | null;
 }) {
-  const center: [number, number] = markers.length
-    ? [markers[0].lat, markers[0].lng]
-    : [30, 0];
+  const first = markers[0] ?? paths?.[0]?.points[0];
+  const center: [number, number] = initialCenter
+    ? [initialCenter.lat, initialCenter.lng]
+    : first
+      ? [first.lat, first.lng]
+      : [30, 0];
   return (
     <MapContainer
       center={center}
-      zoom={markers.length ? 5 : 2}
+      zoom={initialCenter ? initialCenter.zoom : first ? 5 : 2}
       scrollWheelZoom={true}
       className={`rounded-2xl border border-line overflow-hidden ${className}`}
       style={{ height: "100%", width: "100%" }}
@@ -132,7 +179,18 @@ export default function MapView({
           </Popup>
         </Marker>
       ))}
-      <FitBounds markers={markers} />
+      {paths?.map((p) => (
+        <Polyline
+          key={p.id}
+          positions={p.points.map((q) => [q.lat, q.lng] as [number, number])}
+          pathOptions={{ color: p.color ?? "#3c6e47", weight: 5, opacity: 0.85 }}
+        >
+          {p.title && <Popup>{p.title}</Popup>}
+        </Polyline>
+      ))}
+      {onMapClick && <ClickHandler onClick={onMapClick} />}
+      {focus && <FlyTo target={focus} />}
+      {autoFit && <FitBounds markers={markers} paths={paths} />}
     </MapContainer>
   );
 }
