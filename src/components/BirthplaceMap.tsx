@@ -11,6 +11,12 @@ import {
   type GeoCollection,
 } from "@/lib/geojson";
 
+// Countries in the world: the 193 UN members plus its two observer states
+// (Vatican City, Palestine). The outline file only has 177 shapes, so it
+// can't be the denominator.
+const WORLD_COUNTRIES = 195;
+const NOT_STATES = new Set(["District of Columbia", "Puerto Rico"]);
+
 export interface GeoPoint {
   lat: number;
   lng: number;
@@ -21,9 +27,14 @@ export interface GeoPoint {
 export function BirthplaceMap({
   markers,
   points,
+  countries: countryList,
 }: {
   markers: MapMarker[];
   points: GeoPoint[];
+  // Every country to count, in any spelling (players without a pin too).
+  // Defaults to the pins' countries. Pass the same list a "countries" view
+  // shows so the two counts agree.
+  countries?: string[];
 }) {
   const [showStates, setShowStates] = useState(false);
   const [showCountries, setShowCountries] = useState(false);
@@ -39,7 +50,10 @@ export function BirthplaceMap({
       const s = featureForPoint(p.lat, p.lng, states);
       if (s) set.add(s);
     }
-    return { set, total: states.features.length };
+    // The outlines include DC and Puerto Rico; they're shaded and listed but
+    // don't count toward the 50.
+    const counted = [...set].filter((s) => !NOT_STATES.has(s)).length;
+    return { set, counted };
   }, [states, points]);
 
   const countryInfo = useMemo(() => {
@@ -47,20 +61,35 @@ export function BirthplaceMap({
     const known = new Map(
       countries.features.map((f) => [normCountry(f.properties.name), f.properties.name])
     );
-    const set = new Set<string>(); // geojson names
-    for (const p of points) {
-      const gn = known.get(normCountry(p.country));
-      if (gn) set.add(gn);
+    // Collected = distinct countries (by normalized name), same as the list view.
+    const collected = new Map<string, string>(); // norm key -> display name
+    for (const raw of countryList ?? points.map((p) => p.country ?? "")) {
+      const name = raw.trim();
+      if (name && !collected.has(normCountry(name))) collected.set(normCountry(name), name);
     }
-    return { set, total: countries.features.length };
-  }, [countries, points]);
+    // Shade each one's outline: by name, else by where its players' pins fall.
+    // Countries too small for the outline set (Malta, Cape Verde…) can't be
+    // shaded, but still count.
+    const shaded = new Set<string>(); // geojson names
+    const unshaded: string[] = [];
+    for (const [key, name] of collected) {
+      let gn = known.get(key);
+      if (!gn) {
+        const pin = points.find((p) => !p.approx && normCountry(p.country) === key);
+        gn = (pin && featureForPoint(pin.lat, pin.lng, countries)) || undefined;
+      }
+      if (gn) shaded.add(gn);
+      else unshaded.push(name);
+    }
+    return { names: [...collected.values()], shaded, unshaded: new Set(unshaded) };
+  }, [countries, points, countryList]);
 
   const overlays = useMemo(() => {
     const out: GeoCollection[] = [];
     if (showCountries && countries && countryInfo) {
       out.push({
         type: "FeatureCollection",
-        features: countries.features.filter((f) => countryInfo.set.has(f.properties.name)),
+        features: countries.features.filter((f) => countryInfo.shaded.has(f.properties.name)),
       });
     }
     if (showStates && states && stateInfo) {
@@ -78,7 +107,7 @@ export function BirthplaceMap({
         <Toggle
           on={showCountries}
           loading={showCountries && !countries}
-          count={countryInfo ? `${countryInfo.set.size}/${countryInfo.total}` : null}
+          count={countryInfo ? `${countryInfo.names.length}/${WORLD_COUNTRIES}` : null}
           onClick={() => setShowCountries((v) => !v)}
         >
           Countries
@@ -86,7 +115,7 @@ export function BirthplaceMap({
         <Toggle
           on={showStates}
           loading={showStates && !states}
-          count={stateInfo ? `${stateInfo.set.size}/${stateInfo.total}` : null}
+          count={stateInfo ? `${stateInfo.counted}/50` : null}
           onClick={() => setShowStates((v) => !v)}
         >
           US states
@@ -101,13 +130,14 @@ export function BirthplaceMap({
 
       {showCountries && countryInfo && (
         <CollectedList
-          title={`Countries collected (${countryInfo.set.size}/${countryInfo.total})`}
-          names={[...countryInfo.set].sort()}
+          title={`Countries collected (${countryInfo.names.length} of ${WORLD_COUNTRIES})`}
+          names={[...countryInfo.names].sort()}
+          unshaded={countryInfo.unshaded}
         />
       )}
       {showStates && stateInfo && (
         <CollectedList
-          title={`US states collected (${stateInfo.set.size}/${stateInfo.total})`}
+          title={`US states collected (${stateInfo.counted} of 50)`}
           names={[...stateInfo.set].sort()}
         />
       )}
@@ -115,7 +145,15 @@ export function BirthplaceMap({
   );
 }
 
-function CollectedList({ title, names }: { title: string; names: string[] }) {
+function CollectedList({
+  title,
+  names,
+  unshaded,
+}: {
+  title: string;
+  names: string[];
+  unshaded?: Set<string>; // too small to have an outline on this map
+}) {
   return (
     <div className="mt-3">
       <p className="text-xs font-semibold text-ink-soft mb-2">{title}</p>
@@ -124,11 +162,17 @@ function CollectedList({ title, names }: { title: string; names: string[] }) {
       ) : (
         <div className="flex flex-wrap gap-1.5">
           {names.map((n) => (
-            <span key={n} className="chip">
+            <span key={n} className="chip" title={unshaded?.has(n) ? "Too small to shade on this map" : undefined}>
               {n}
+              {unshaded?.has(n) ? "*" : ""}
             </span>
           ))}
         </div>
+      )}
+      {unshaded && unshaded.size > 0 && (
+        <p className="text-xs text-muted mt-2">
+          * Counted, but too small to shade on this map.
+        </p>
       )}
     </div>
   );
