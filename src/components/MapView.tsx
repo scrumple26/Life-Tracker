@@ -68,6 +68,23 @@ function FitBounds({ markers, paths }: { markers: MapMarker[]; paths?: MapPath[]
   return null;
 }
 
+// Leaflet finishes a zoom animation with an uncancellable 250ms timeout. If the
+// map unmounts first (switching screens mid-zoom) that callback reads the
+// removed panes and throws "_leaflet_pos". It bails out when _animatingZoom is
+// false, so clear that on unmount.
+function StopAnimationsOnUnmount() {
+  const map = useMap();
+  useEffect(
+    () => () => {
+      // Not map.stop(): it calls setZoom, which itself throws once the map
+      // container has been removed.
+      (map as unknown as { _animatingZoom: boolean })._animatingZoom = false;
+    },
+    [map]
+  );
+  return null;
+}
+
 // Pans/zooms when `target` changes (e.g. a search result was picked).
 function FlyTo({ target }: { target: LatLng & { zoom: number } }) {
   const map = useMap();
@@ -132,9 +149,13 @@ export default function MapView({
       className={`rounded-2xl border border-line overflow-hidden ${className}`}
       style={{ height: "100%", width: "100%" }}
     >
+      {/* Esri World Topo: keyless, and draws trails and footpaths, which the
+          route tracer needs. (CARTO basemaps now return "API KEY REQUIRED"
+          tiles, and OSM's own servers block apps outside their usage policy.) */}
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+        attribution='Tiles &copy; <a href="https://www.esri.com/">Esri</a> &mdash; Esri, HERE, Garmin, USGS, &copy; OpenStreetMap contributors'
+        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
+        maxZoom={19}
       />
       {overlays?.map((fc) => (
         <GeoJSON
@@ -190,6 +211,7 @@ export default function MapView({
       ))}
       {onMapClick && <ClickHandler onClick={onMapClick} />}
       {focus && <FlyTo target={focus} />}
+      <StopAnimationsOnUnmount />
       {autoFit && <FitBounds markers={markers} paths={paths} />}
     </MapContainer>
   );
