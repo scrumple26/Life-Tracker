@@ -2,6 +2,9 @@ import type { LatLng } from "./types";
 
 export interface GeoHit extends LatLng {
   label: string;
+  city: string;
+  state: string;
+  country: string;
 }
 
 // Geocode a free-text location (via our /api/geocode Nominatim proxy).
@@ -38,7 +41,7 @@ export async function searchPlaces(query: string, limit = 5): Promise<GeoHit[]> 
   const q = query.trim();
   if (!q) return [];
   try {
-    const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}&limit=${limit}`);
+    const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}&limit=${limit}&v=2`);
     if (!res.ok) return [];
     const { results } = (await res.json()) as { results: GeoHit[] };
     return Array.isArray(results) ? results : [];

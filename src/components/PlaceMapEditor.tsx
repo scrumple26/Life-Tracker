@@ -84,10 +84,12 @@ function PlaceSearch({
 export function LocationPicker({
   value,
   onChange,
+  onPickPlace,
   suggestion,
 }: {
   value: LatLng | null;
   onChange: (ll: LatLng | null) => void;
+  onPickPlace?: (hit: GeoHit) => void; // a search result was chosen (has city/state/country)
   suggestion?: string; // e.g. "<name>, <city>" — used when the search box is empty
 }) {
   const [focus, setFocus] = useState<Focus | null>(null);
@@ -98,6 +100,7 @@ export function LocationPicker({
         fallbackQuery={suggestion}
         onPick={(hit) => {
           onChange({ lat: hit.lat, lng: hit.lng });
+          onPickPlace?.(hit);
           setFocus({ lat: hit.lat, lng: hit.lng, zoom: 15 });
         }}
       />
@@ -133,8 +136,10 @@ export function RouteEditor({
   profile,
   anchor,
   suggestion,
+  onPickPlace,
 }: {
   route: string;
+  onPickPlace?: (hit: GeoHit) => void;
   onChange: (route: string) => void;
   profile: RouteProfile;
   anchor?: LatLng | null; // where to centre an empty map (the place's pin)
@@ -196,7 +201,10 @@ export function RouteEditor({
       <PlaceSearch
         placeholder="Jump to an area"
         fallbackQuery={suggestion}
-        onPick={(hit) => setFocus({ lat: hit.lat, lng: hit.lng, zoom: 15 })}
+        onPick={(hit) => {
+          setFocus({ lat: hit.lat, lng: hit.lng, zoom: 15 });
+          onPickPlace?.(hit);
+        }}
       />
       <MapPanel
         className="h-[340px]"

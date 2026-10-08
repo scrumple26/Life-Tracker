@@ -130,6 +130,7 @@ export interface Place {
   tags: PlaceTag[];
   courseType: CourseType; // only meaningful when tags include "course"
   city: string;
+  state: string; // state / province / region
   country: string;
   lat: number | null;
   lng: number | null;

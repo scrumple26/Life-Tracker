@@ -6,8 +6,9 @@
 // User-Agent, lets Vercel's CDN cache repeat lookups, and keeps one place to
 // tune the ranking.
 //
-//   GET /api/geocode?q=<text>            → { result: { lat, lng, label } | null }
-//   GET /api/geocode?q=<text>&limit=5    → { results: [{ lat, lng, label }] }
+//   GET /api/geocode?q=<text>            → { result: Hit | null }
+//   GET /api/geocode?q=<text>&limit=5    → { results: Hit[] }
+//   Hit = { lat, lng, label, city, state, country }  (address parts may be "")
 
 const USER_AGENT = "lifelong-tracker/1.0 (https://github.com/scrumple26/Life-Tracker)";
 
@@ -32,6 +33,7 @@ interface NominatimResult {
   addresstype?: string;
   type?: string;
   importance?: number;
+  address?: Record<string, string>;
 }
 
 function rank(r: NominatimResult): number {
@@ -40,7 +42,16 @@ function rank(r: NominatimResult): number {
 }
 
 function toHit(r: NominatimResult) {
-  return { lat: parseFloat(r.lat), lng: parseFloat(r.lon), label: r.display_name ?? "" };
+  const a = r.address ?? {};
+  return {
+    lat: parseFloat(r.lat),
+    lng: parseFloat(r.lon),
+    label: r.display_name ?? "",
+    // Nominatim names the locality by its size; take the first that exists.
+    city: a.city || a.town || a.village || a.hamlet || a.municipality || a.suburb || "",
+    state: a.state || a.province || a.region || "",
+    country: a.country || "",
+  };
 }
 
 export async function GET(request: Request) {
@@ -55,7 +66,7 @@ export async function GET(request: Request) {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
         q
-      )}&format=json&limit=${Math.max(limit, 5)}&addressdetails=0`,
+      )}&format=json&limit=${Math.max(limit, 5)}&addressdetails=1`,
       { headers: { "User-Agent": USER_AGENT, Accept: "application/json" } }
     );
     if (!res.ok) {

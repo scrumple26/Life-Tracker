@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { newId, useApp } from "@/lib/data";
-import { geocodeFirst } from "@/lib/geo";
+import { geocodeFirst, type GeoHit } from "@/lib/geo";
 import { decodePolyline, fmtMiles, pathKm } from "@/lib/route";
 import {
   COURSE_TYPES,
@@ -48,6 +48,7 @@ function emptyPlace(tag: PlaceTag, courseType: CourseType): Place {
     tags: [tag],
     courseType: tag === "course" ? courseType : "",
     city: "",
+    state: "",
     country: "",
     lat: null,
     lng: null,
@@ -121,7 +122,7 @@ export function PlacesTab({
           lines: [
             p.tags.includes("course") ? courseLabel(p.courseType) : "",
             p.rating ? "★".repeat(p.rating) : "",
-            [p.city, p.country].filter(Boolean).join(", "),
+            [p.city, p.state, p.country].filter(Boolean).join(", "),
           ].filter(Boolean),
         })),
     [shown]
@@ -164,6 +165,7 @@ export function PlacesTab({
         ...draft,
         name: draft.name.trim(),
         city: draft.city.trim(),
+        state: draft.state.trim(),
         country: draft.country.trim(),
         notes: draft.notes.trim(),
         courseType: isCourse ? draft.courseType : "",
@@ -178,7 +180,7 @@ export function PlacesTab({
       }
       // No pin dropped: best-effort locate from the name and town.
       if (rec.lat == null || rec.lng == null) {
-        const where = [rec.city, rec.country].filter(Boolean).join(", ");
+        const where = [rec.city, rec.state, rec.country].filter(Boolean).join(", ");
         const coords = await geocodeFirst([
           [rec.name, where].filter(Boolean).join(", "),
           where,
@@ -229,9 +231,23 @@ export function PlacesTab({
     await saveFields(trips ? { places, trips } : { places });
   }
 
+  // Picking a search result fills in where it is.
+  function fillFromSearch(hit: GeoHit) {
+    setDraft((d) =>
+      d
+        ? {
+            ...d,
+            city: hit.city || d.city,
+            state: hit.state || d.state,
+            country: hit.country || d.country,
+          }
+        : d
+    );
+  }
+
   const draftIsRoute = !!draft && draft.tags.includes("course") && isRouteType(draft.courseType);
   const suggestion = draft
-    ? [draft.name, draft.city, draft.country].filter((s) => s.trim()).join(", ")
+    ? [draft.name, draft.city, draft.state, draft.country].filter((s) => s.trim()).join(", ")
     : "";
 
   return (
@@ -309,21 +325,59 @@ export function PlacesTab({
               </div>
             )}
 
-            <div>
-              <label className="field-label">City</label>
-              <input
-                className="field"
-                value={draft.city}
-                onChange={(e) => setDraft({ ...draft, city: e.target.value })}
-              />
+            <div className="sm:col-span-2">
+              <label className="field-label">{draftIsRoute ? "Route you took" : "Location"}</label>
+              {draftIsRoute ? (
+                <RouteEditor
+                  key={draft.id || "new"}
+                  route={draft.route}
+                  profile={draft.courseType === "biking" ? "bike" : "foot"}
+                  anchor={draft.lat != null && draft.lng != null ? { lat: draft.lat, lng: draft.lng } : null}
+                  suggestion={suggestion}
+                  onPickPlace={fillFromSearch}
+                  // Re-pin at the new start whenever the route changes.
+                  onChange={(route) => {
+                    const [first] = route ? decodePolyline(route) : [];
+                    setDraft((d) =>
+                      d ? { ...d, route, lat: first?.lat ?? d.lat, lng: first?.lng ?? d.lng } : d
+                    );
+                  }}
+                />
+              ) : (
+                <LocationPicker
+                  value={draft.lat != null && draft.lng != null ? { lat: draft.lat, lng: draft.lng } : null}
+                  suggestion={suggestion}
+                  onPickPlace={fillFromSearch}
+                  onChange={(ll) => setDraft((d) => (d ? { ...d, lat: ll?.lat ?? null, lng: ll?.lng ?? null } : d))}
+                />
+              )}
             </div>
-            <div>
-              <label className="field-label">Country / state</label>
-              <input
-                className="field"
-                value={draft.country}
-                onChange={(e) => setDraft({ ...draft, country: e.target.value })}
-              />
+
+            <div className="sm:col-span-2 grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className="field-label">City</label>
+                <input
+                  className="field"
+                  value={draft.city}
+                  onChange={(e) => setDraft({ ...draft, city: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="field-label">State</label>
+                <input
+                  className="field"
+                  value={draft.state}
+                  onChange={(e) => setDraft({ ...draft, state: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="field-label">Country</label>
+                <input
+                  className="field"
+                  value={draft.country}
+                  onChange={(e) => setDraft({ ...draft, country: e.target.value })}
+                />
+              </div>
             </div>
             <div>
               <label className="field-label">Last visited</label>
@@ -337,32 +391,6 @@ export function PlacesTab({
             <div>
               <label className="field-label">Rating</label>
               <Stars value={draft.rating} size={26} onChange={(n) => setDraft({ ...draft, rating: n })} />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="field-label">{draftIsRoute ? "Route you took" : "Location"}</label>
-              {draftIsRoute ? (
-                <RouteEditor
-                  key={draft.id || "new"}
-                  route={draft.route}
-                  profile={draft.courseType === "biking" ? "bike" : "foot"}
-                  anchor={draft.lat != null && draft.lng != null ? { lat: draft.lat, lng: draft.lng } : null}
-                  suggestion={suggestion}
-                  // Re-pin at the new start whenever the route changes.
-                  onChange={(route) => {
-                    const [first] = route ? decodePolyline(route) : [];
-                    setDraft((d) =>
-                      d ? { ...d, route, lat: first?.lat ?? d.lat, lng: first?.lng ?? d.lng } : d
-                    );
-                  }}
-                />
-              ) : (
-                <LocationPicker
-                  value={draft.lat != null && draft.lng != null ? { lat: draft.lat, lng: draft.lng } : null}
-                  suggestion={suggestion}
-                  onChange={(ll) => setDraft((d) => (d ? { ...d, lat: ll?.lat ?? null, lng: ll?.lng ?? null } : d))}
-                />
-              )}
             </div>
 
             <div className="sm:col-span-2">
@@ -455,7 +483,7 @@ export function PlacesTab({
                   <div className="min-w-0">
                     <p className="font-semibold text-ink truncate">{p.name}</p>
                     <p className="text-xs text-muted">
-                      {[[p.city, p.country].filter(Boolean).join(", "), p.date]
+                      {[[p.city, p.state, p.country].filter(Boolean).join(", "), p.date]
                         .filter(Boolean)
                         .join(" · ")}
                     </p>

@@ -113,6 +113,7 @@ export function TripsTab() {
             tags,
             courseType: "",
             city: trip.city,
+            state: "",
             country: trip.country,
             lat: null,
             lng: null,
