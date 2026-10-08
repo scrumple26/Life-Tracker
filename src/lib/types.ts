@@ -169,9 +169,24 @@ export interface OtherEvent {
   createdAt: string;
 }
 
+// Where a team is from (its home city), set on the Teams tab. Keyed by
+// teamKey(name) — the legacy app's format, so its saved locations carry over.
+export interface TeamLoc {
+  city?: string;
+  state?: string;
+  country?: string;
+  lat: number | null;
+  lng: number | null;
+}
+
+export function teamKey(name: string): string {
+  return name.toLowerCase().trim();
+}
+
 // ── Settings ─────────────────────────────────────────────────────────────
 export interface Settings {
   hiddenMenu: string[]; // MenuItemId values switched off in Settings
+  stadiumsAsLandmarks: boolean; // list venues from logged games under Landmarks
 }
 
 export interface Trip {
@@ -222,7 +237,7 @@ export interface UserData {
   events: SportEvent[];
   scorerInfo: Record<string, ScorerInfo>;
   playerInfo: Record<string, PlayerInfo>;
-  teamLocs: Record<string, LatLng & { city?: string; state?: string; country?: string }>;
+  teamLocs: Record<string, TeamLoc>; // keyed by teamKey(name)
   restCategories: RestCategory[];
   restaurants: Restaurant[];
   trips: Trip[];
@@ -245,7 +260,7 @@ export const EMPTY_USER_DATA: UserData = {
   places: [],
   movies: [],
   otherEvents: [],
-  settings: { hiddenMenu: [] },
+  settings: { hiddenMenu: [], stadiumsAsLandmarks: false },
 };
 
 interface SportMeta {

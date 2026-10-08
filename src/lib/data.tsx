@@ -161,7 +161,24 @@ function normalizeOtherEvent(o: Record<string, unknown>): OtherEvent {
 
 function normalizeSettings(raw: unknown): Settings {
   const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  return { hiddenMenu: asStrArr(o.hiddenMenu) };
+  return { hiddenMenu: asStrArr(o.hiddenMenu), stadiumsAsLandmarks: o.stadiumsAsLandmarks === true };
+}
+
+function normalizeTeamLocs(raw: unknown): UserData["teamLocs"] {
+  if (!raw || typeof raw !== "object") return {};
+  const out: UserData["teamLocs"] = {};
+  for (const [key, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!v || typeof v !== "object") continue;
+    const o = v as Record<string, unknown>;
+    out[key] = {
+      city: asStr(o.city) || undefined,
+      state: asStr(o.state) || undefined,
+      country: asStr(o.country) || undefined,
+      lat: asNum(o.lat),
+      lng: asNum(o.lng),
+    };
+  }
+  return out;
 }
 
 function normalizeTrip(t: Record<string, unknown>): Trip {
@@ -263,7 +280,7 @@ function normalizeData(raw: Record<string, unknown> | undefined): UserData {
       : [],
     scorerInfo: normalizeScorerInfo(raw.scorerInfo),
     playerInfo: normalizePlayerInfo(raw.playerInfo),
-    teamLocs: (raw.teamLocs as UserData["teamLocs"]) ?? {},
+    teamLocs: normalizeTeamLocs(raw.teamLocs),
     restCategories: normalizeList(raw.restCategories, normalizeRestCategory),
     restaurants: normalizeList(raw.restaurants, normalizeRestaurant),
     trips: normalizeList(raw.trips, normalizeTrip),
