@@ -249,7 +249,7 @@ function MenuDropdown({
 }: {
   label: string;
   alignRight?: boolean; // keep the popover on-screen for groups further right on phones
-  items: readonly { id: MenuItemId; label: string; emoji: string }[];
+  items: readonly { id: MenuItemId; label: string }[];
   active: ScreenId;
   onPick: (id: MenuItemId) => void;
 }) {
@@ -306,15 +306,12 @@ function MenuDropdown({
                 onPick(i.id);
                 setOpen(false);
               }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left transition ${
+              className={`w-full px-3 py-2 rounded-lg text-sm text-left transition ${
                 i.id === active
                   ? "bg-terracotta-soft text-terracotta-dark font-semibold"
                   : "text-ink hover:bg-paper-2"
               }`}
             >
-              <span className="text-base leading-none" aria-hidden>
-                {i.emoji}
-              </span>
               {i.label}
             </button>
           ))}
