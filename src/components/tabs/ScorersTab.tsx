@@ -196,7 +196,6 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
 
       {scorers.length === 0 ? (
         <div className="card p-10 text-center">
-          <div className="text-4xl mb-3">⚽</div>
           <p className="text-ink font-semibold">No goals logged yet</p>
           <p className="text-sm text-muted mt-1">
             Log a soccer game and add the scorers.
@@ -215,7 +214,7 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
                   <div className="min-w-0">
                     <p className="font-medium text-ink truncate">{s.name}</p>
                     {birthplace && !isEditing && (
-                      <p className="text-xs text-muted">📍 {birthplace}</p>
+                      <p className="text-xs text-muted">{birthplace}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -268,7 +267,6 @@ export function ScorersTab({ sport }: { sport?: Sport }) {
         <BirthplaceMap markers={markers} points={points} />
       ) : (
         <div className="card p-10 text-center">
-          <div className="text-3xl mb-2">🌍</div>
           <p className="text-ink font-semibold">No birthplaces set yet</p>
           <p className="text-sm text-muted mt-1">
             Add a birthplace to scorers in the list view to map them.

@@ -7,7 +7,6 @@ import { newId, useApp } from "@/lib/data";
 import { geocode, geocodeFirst, venueQueries } from "@/lib/geo";
 import {
   isSoccerSport,
-  sportEmoji,
   sportLabel,
   type LineupEntry,
   type PlayerInfo,
@@ -387,7 +386,7 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
       await saveEvents(next);
       await saveManualOrigins();
       resetForm();
-      setStatus(isEdit ? "Updated! 🎉" : "Saved! 🎉");
+      setStatus(isEdit ? "Updated!" : "Saved!");
       setTimeout(() => setStatus(null), 2500);
     } catch (err) {
       setStatus((err as Error)?.message ?? "Something went wrong saving the event.");
@@ -462,8 +461,7 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
           <div>
             <label className="field-label">Sport</label>
             <div className="field flex items-center gap-2 bg-paper-2/60">
-              <span aria-hidden>{sportEmoji(sport)}</span>
-              <span className="truncate">{sportLabel(sport)}</span>
+                            <span className="truncate">{sportLabel(sport)}</span>
             </div>
           </div>
           <div>
@@ -708,7 +706,7 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
               <div className="flex flex-wrap gap-1.5 mt-3">
                 {scorers.map((s, i) => (
                   <span key={i} className="chip">
-                    {s.team === "home" ? "🏠" : "✈️"} {s.name}
+                    {s.team === "home" ? "Home" : "Away"} · {s.name}
                     {s.minute ? ` ${s.minute}'` : ""}
                     <button
                       type="button"
@@ -864,7 +862,6 @@ export function LogEventTab({ sport: filterSport }: { sport?: Sport }) {
         <h3 className="text-3xl text-ink mb-5">Everything you&apos;ve logged</h3>
         {data.events.length === 0 ? (
           <div className="card p-10 text-center">
-            <div className="text-4xl mb-3">🎟️</div>
             <p className="text-ink font-semibold">No events yet</p>
             <p className="text-sm text-muted mt-1">
               Fill in the form above to log your first game.

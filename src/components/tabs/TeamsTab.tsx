@@ -79,7 +79,6 @@ export function TeamsTab({ sport }: { sport?: Sport }) {
 
       {teams.length === 0 ? (
         <div className="card p-10 text-center">
-          <div className="text-4xl mb-3">🛡️</div>
           <p className="text-ink font-semibold">No teams yet</p>
           <p className="text-sm text-muted mt-1">Log some events to get started.</p>
         </div>
@@ -100,7 +99,6 @@ export function TeamsTab({ sport }: { sport?: Sport }) {
         </div>
       ) : (
         <div className="card p-10 text-center">
-          <div className="text-3xl mb-2">🗺️</div>
           <p className="text-ink font-semibold">No team locations yet</p>
           <p className="text-sm text-muted mt-1">
             Locations appear automatically once events are geocoded.

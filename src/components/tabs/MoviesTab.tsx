@@ -134,7 +134,6 @@ export function MoviesTab() {
 
       {movies.length === 0 ? (
         <div className="card p-10 text-center">
-          <div className="text-4xl mb-3">🎬</div>
           <p className="text-ink font-semibold">No movies yet</p>
           <p className="text-sm text-muted mt-1">Add the last one you saw.</p>
         </div>

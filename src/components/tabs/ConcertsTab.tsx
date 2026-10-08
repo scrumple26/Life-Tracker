@@ -175,7 +175,6 @@ export function ConcertsTab() {
 
       {concerts.length === 0 ? (
         <div className="card p-10 text-center">
-          <div className="text-4xl mb-3">🎸</div>
           <p className="text-ink font-semibold">No shows yet</p>
           <p className="text-sm text-muted mt-1">Add a concert to start your log.</p>
         </div>

@@ -219,7 +219,6 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
 
       {players.length === 0 ? (
         <div className="card p-10 text-center">
-          <div className="text-4xl mb-3">👥</div>
           <p className="text-ink font-semibold">No players yet</p>
           <p className="text-sm text-muted mt-1 max-w-sm mx-auto">
             Log a soccer game with the <strong>Find match</strong> auto-fill — it
@@ -274,7 +273,6 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
               <BirthplaceMap markers={markers} points={points} />
             ) : (
               <div className="card p-10 text-center">
-                <div className="text-3xl mb-2">🌍</div>
                 <p className="text-ink font-semibold">No birthplaces yet</p>
                 <p className="text-sm text-muted mt-1">
                   Hit “Fetch birthplaces” to look them up from the football API.
@@ -283,7 +281,6 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
             )
           ) : listedPlayers.length === 0 ? (
             <div className="card p-10 text-center">
-              <div className="text-3xl mb-2">✅</div>
               <p className="text-ink font-semibold">Every player has a birth location</p>
               <p className="text-sm text-muted mt-1">
                 Uncheck the filter to see all {players.length} players.
@@ -302,7 +299,7 @@ export function PlayersTab({ sport }: { sport?: Sport }) {
                         <p className="font-medium text-ink truncate">{p.name}</p>
                         {info?.birthplace && !isEditing && (
                           <p className={`text-xs truncate ${hasLoc ? "text-muted" : "text-clay"}`}>
-                            📍 {withUsState(info.birthplace, info.lat, info.lng, states, info.approx)}
+                            {withUsState(info.birthplace, info.lat, info.lng, states, info.approx)}
                             {!hasLoc && " (not located)"}
                             {hasLoc && info.approx && " (country approx.)"}
                           </p>
@@ -372,7 +369,6 @@ function CountriesRanked({
   if (ranks.length === 0) {
     return (
       <div className="card p-10 text-center">
-        <div className="text-3xl mb-2">🏳️</div>
         <p className="text-ink font-semibold">No countries yet</p>
         <p className="text-sm text-muted mt-1">
           Fetch birthplaces so each player has a country to rank.

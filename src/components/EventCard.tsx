@@ -1,6 +1,6 @@
 "use client";
 
-import { sportEmoji, sportLabel, type SportEvent } from "@/lib/types";
+import { sportLabel, type SportEvent } from "@/lib/types";
 
 function formatDate(d: string | null) {
   if (!d) return null;
@@ -43,9 +43,6 @@ export function EventCard({
         {/* header strip */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-lg leading-none" aria-hidden>
-              {sportEmoji(e.sport)}
-            </span>
             <div className="flex flex-col">
               <span className="overline flex items-center gap-1.5">
                 {sportLabel(e.sport)}
@@ -54,7 +51,7 @@ export function EventCard({
                     className="inline-flex items-center gap-1 rounded-full bg-sage-soft px-1.5 py-0.5 text-[10px] font-bold text-sage normal-case tracking-normal"
                     title="Linked to API-Football — lineups & scorers synced"
                   >
-                    🔗 API
+                    API
                   </span>
                 )}
               </span>
@@ -133,7 +130,7 @@ export function EventCard({
           <div className="mt-3 flex flex-wrap gap-1.5 justify-center">
             {e.scorers.map((s, i) => (
               <span key={i} className="chip">
-                ⚽ {s.name}
+                {s.name}
                 {s.minute ? ` ${s.minute}'` : ""}
               </span>
             ))}

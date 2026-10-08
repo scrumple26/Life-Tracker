@@ -9,7 +9,6 @@ import {
   isCourseSport,
   isSoccerSport,
   slugifySport,
-  sportEmoji,
   sportLabel,
   type Sport,
 } from "@/lib/types";
@@ -144,15 +143,13 @@ export function AppShell() {
             ))}
             <button
               onClick={() => setScreen("settings")}
-              aria-label="Settings"
-              title="Settings"
-              className={`ml-auto shrink-0 h-8 w-8 rounded-full text-base transition ${
+              className={`ml-auto shrink-0 px-3.5 py-1.5 rounded-full text-sm font-semibold transition ${
                 tab === "settings"
                   ? "bg-terracotta text-white"
                   : "text-ink-soft hover:bg-paper-2 hover:text-ink"
               }`}
             >
-              ⚙
+              Settings
             </button>
           </div>
         </nav>
@@ -180,9 +177,6 @@ export function AppShell() {
                   ← All sports
                 </button>
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl leading-none" aria-hidden>
-                    {sportEmoji(selectedSport)}
-                  </span>
                   <h2 className="text-2xl text-ink">{sportLabel(selectedSport)}</h2>
                 </div>
               </div>
@@ -277,7 +271,7 @@ function MenuDropdown({
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-semibold transition inline-flex items-center gap-1.5 ${
+        className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-semibold transition inline-flex items-center gap-1 ${
           current
             ? "bg-terracotta text-white shadow-[0_6px_14px_rgba(60,110,71,0.28)]"
             : "text-ink-soft hover:bg-paper-2 hover:text-ink"
@@ -289,9 +283,6 @@ function MenuDropdown({
             · {current.label}
           </span>
         )}
-        <span className={`text-[10px] transition-transform ${open ? "rotate-180" : ""}`} aria-hidden>
-          ▼
-        </span>
       </button>
       {open && (
         <div
@@ -365,7 +356,7 @@ function SportPicker({
                 onClick={() => onPick(s)}
                 className="chip hover:border-terracotta hover:text-terracotta transition"
               >
-                {sportEmoji(s)} {sportLabel(s)}
+                {sportLabel(s)}
               </button>
             ))}
           </div>
@@ -399,7 +390,6 @@ function SportPicker({
 
       {sports.length === 0 ? (
         <div className="card p-10 text-center">
-          <div className="text-4xl mb-3">🏟️</div>
           <p className="text-ink font-semibold">No sports yet</p>
           <p className="text-sm text-muted mt-1">
             Hit <strong>+ Add sport</strong> to pick one and log your first game.
@@ -413,9 +403,6 @@ function SportPicker({
               onClick={() => onPick(sport)}
               className="card p-5 text-left hover:shadow-[var(--shadow-lift)] transition flex items-center gap-4"
             >
-              <span className="text-3xl leading-none" aria-hidden>
-                {sportEmoji(sport)}
-              </span>
               <div className="min-w-0">
                 <p className="font-semibold text-ink truncate">{sportLabel(sport)}</p>
                 <p className="text-xs text-muted">

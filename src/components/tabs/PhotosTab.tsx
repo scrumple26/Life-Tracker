@@ -63,7 +63,6 @@ export function PhotosTab({ sport }: { sport?: Sport }) {
 
       {photos.length === 0 ? (
         <div className="card p-10 text-center">
-          <div className="text-4xl mb-3">📷</div>
           <p className="text-ink font-semibold">No photos yet</p>
           <p className="text-sm text-muted mt-1">
             Add some when logging an event!

@@ -17,23 +17,20 @@ import { FilterChip, Segmented } from "../FilterChip";
 import { MapPanel, type MapMarker, type MapPath } from "../Map";
 import { LocationPicker, RouteEditor } from "../PlaceMapEditor";
 
-const COPY: Record<PlaceTag, { title: string; blurb: string; emoji: string; noun: string }> = {
+const COPY: Record<PlaceTag, { title: string; blurb: string; noun: string }> = {
   course: {
     title: "Courses & Trails",
     blurb: "Golf and disc golf courses, plus the hiking, walking and biking routes you've done.",
-    emoji: "🥾",
     noun: "course or trail",
   },
   landmark: {
     title: "Landmarks",
     blurb: "Famous sights and places that stuck with you.",
-    emoji: "🏛️",
     noun: "landmark",
   },
   park: {
     title: "Parks",
     blurb: "City, state and national parks you've explored.",
-    emoji: "🌳",
     noun: "park",
   },
 };
@@ -65,7 +62,7 @@ function emptyPlace(tag: PlaceTag, courseType: CourseType): Place {
 
 function courseLabel(t: CourseType): string {
   const c = COURSE_TYPES.find((x) => x.id === t);
-  return c ? `${c.emoji} ${c.label}` : "Course / trail";
+  return c ? c.label : "Course / trail";
 }
 
 /**
@@ -283,7 +280,7 @@ export function PlacesTab({
                 <div className="flex flex-wrap gap-1.5">
                   {PLACE_TAGS.map((t) => (
                     <FilterChip key={t.id} active={draft.tags.includes(t.id)} onClick={() => toggleTag(t.id)}>
-                      {t.emoji} {t.label}
+                      {t.label}
                     </FilterChip>
                   ))}
                 </div>
@@ -305,7 +302,7 @@ export function PlacesTab({
                         setDraft({ ...draft, courseType: draft.courseType === t.id ? "" : t.id })
                       }
                     >
-                      {t.emoji} {t.label}
+                      {t.label}
                     </FilterChip>
                   ))}
                 </div>
@@ -414,7 +411,7 @@ export function PlacesTab({
             </FilterChip>
             {typesPresent.map((t) => (
               <FilterChip key={t.id} active={filter === t.id} onClick={() => setFilter(t.id)}>
-                {t.emoji} {t.label}
+                {t.label}
               </FilterChip>
             ))}
           </div>
@@ -423,7 +420,6 @@ export function PlacesTab({
 
       {shown.length === 0 ? (
         <div className="card p-10 text-center">
-          <div className="text-4xl mb-3">{courseType === "golf" ? "⛳" : courseType === "disc-golf" ? "🥏" : copy.emoji}</div>
           <p className="text-ink font-semibold">Nothing here yet</p>
           <p className="text-sm text-muted mt-1">
             Add a {noun}
@@ -443,7 +439,6 @@ export function PlacesTab({
             <MapPanel markers={markers} paths={paths} />
           ) : (
             <div className="h-[300px] rounded-2xl bg-paper-2 flex flex-col items-center justify-center text-center px-6">
-              <div className="text-3xl mb-2">🗺️</div>
               <p className="text-ink font-semibold">Nothing on the map yet</p>
               <p className="text-sm text-muted mt-1">Edit an entry to drop a pin or trace its route.</p>
             </div>
@@ -471,14 +466,14 @@ export function PlacesTab({
                   {p.tags.includes("course") && !courseType && (
                     <span className="chip">{courseLabel(p.courseType)}</span>
                   )}
-                  {km > 0 && <span className="chip">〰️ {fmtMiles(km)}</span>}
+                  {km > 0 && <span className="chip">{fmtMiles(km)}</span>}
                   {otherTags.map((t) => (
                     <span key={t.id} className="chip">
-                      {t.emoji} {t.label}
+                      {t.label}
                     </span>
                   ))}
                   {p.tripId && tripName(p.tripId) && (
-                    <span className="chip">✈️ {tripName(p.tripId)}</span>
+                    <span className="chip">Trip: {tripName(p.tripId)}</span>
                   )}
                 </div>
                 {p.notes && <p className="text-sm text-ink-soft mt-2 whitespace-pre-wrap">{p.notes}</p>}

@@ -70,7 +70,7 @@ function PlaceSearch({
                   setResults(null);
                 }}
               >
-                📍 {r.label}
+                {r.label}
               </button>
             </li>
           ))}

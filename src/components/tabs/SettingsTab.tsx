@@ -32,9 +32,6 @@ export function SettingsTab() {
                 return (
                   <li key={item.id}>
                     <label className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-paper-2 cursor-pointer">
-                      <span className="text-lg leading-none" aria-hidden>
-                        {item.emoji}
-                      </span>
                       <span className="flex-1 text-sm font-medium text-ink">{item.label}</span>
                       <Switch on={on} onChange={() => toggle(item.id)} label={item.label} />
                     </label>

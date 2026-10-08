@@ -137,7 +137,6 @@ export function StadiumsTab({ sport }: { sport?: Sport }) {
           <MapPanel markers={markers} />
         ) : (
           <div className="h-[300px] rounded-2xl bg-paper-2 flex flex-col items-center justify-center text-center px-6">
-            <div className="text-3xl mb-2">🗺️</div>
             <p className="text-ink font-semibold">No mapped venues yet</p>
             <p className="text-sm text-muted mt-1 max-w-sm">
               Log events with a stadium and city — new ones are located

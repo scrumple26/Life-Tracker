@@ -318,7 +318,7 @@ export function TripsTab() {
                             active={(locTags[l.id] ?? []).includes(t.id)}
                             onClick={() => toggleLocTag(l.id, t.id)}
                           >
-                            {t.emoji} {t.label}
+                            {t.label}
                           </FilterChip>
                         ))}
                       </div>
@@ -371,7 +371,6 @@ export function TripsTab() {
 
       {trips.length === 0 ? (
         <div className="card p-10 text-center">
-          <div className="text-4xl mb-3">🌍</div>
           <p className="text-ink font-semibold">No trips yet</p>
           <p className="text-sm text-muted mt-1">Add your first trip to map it.</p>
         </div>
@@ -382,7 +381,6 @@ export function TripsTab() {
           </div>
         ) : (
           <div className="card p-10 text-center">
-            <div className="text-3xl mb-2">🗺️</div>
             <p className="text-ink font-semibold">No locations to map</p>
             <p className="text-sm text-muted mt-1">Add a city/country to a trip to place it.</p>
           </div>
@@ -475,8 +473,8 @@ function TripLocations({
                 {PLACE_TAGS.filter((t) =>
                   (l.placeId ? places.get(l.placeId)?.tags ?? [] : []).includes(t.id)
                 ).map((t) => (
-                  <span key={t.id} className="shrink-0 text-sm" title={t.label}>
-                    {t.emoji}
+                  <span key={t.id} className="shrink-0 chip">
+                    {t.label}
                   </span>
                 ))}
                 <span className="shrink-0 text-xs text-muted">{isOpen ? "Hide" : "Details"}</span>
