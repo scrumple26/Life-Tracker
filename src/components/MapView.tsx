@@ -106,6 +106,11 @@ export interface MapPath {
   title?: string; // popup label
 }
 
+const WORLD_BOUNDS: [[number, number], [number, number]] = [
+  [-85, -180],
+  [85, 180],
+];
+
 const HIGHLIGHT_STYLE = {
   fillColor: "#5bb8f5",
   fillOpacity: 0.35,
@@ -146,6 +151,12 @@ export default function MapView({
       center={center}
       zoom={initialCenter ? initialCenter.zoom : first ? 5 : 2}
       scrollWheelZoom={true}
+      // Keep the world in view: no dragging off its edges, no zooming out
+      // past one copy, and no repeated copies to lose the pins in.
+      maxBounds={WORLD_BOUNDS}
+      maxBoundsViscosity={1}
+      minZoom={2}
+      worldCopyJump={false}
       className={`rounded-2xl border border-line overflow-hidden ${className}`}
       style={{ height: "100%", width: "100%" }}
     >
@@ -156,6 +167,7 @@ export default function MapView({
         attribution='Tiles &copy; <a href="https://www.esri.com/">Esri</a> &mdash; Esri, HERE, Garmin, USGS, &copy; OpenStreetMap contributors'
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
         maxZoom={19}
+        noWrap
       />
       {overlays?.map((fc) => (
         <GeoJSON
