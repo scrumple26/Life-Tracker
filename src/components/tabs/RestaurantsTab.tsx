@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { newId, useApp } from "@/lib/data";
 import type { Restaurant } from "@/lib/types";
 import { Stars } from "../Stars";
+import { FilterChip } from "../FilterChip";
 
 function emptyDraft(): Restaurant {
   return {
@@ -267,28 +268,5 @@ export function RestaurantsTab() {
         </ul>
       )}
     </section>
-  );
-}
-
-function FilterChip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-3.5 py-1.5 rounded-full text-sm font-semibold transition ${
-        active
-          ? "bg-terracotta text-white"
-          : "bg-paper-2 text-ink-soft hover:text-ink"
-      }`}
-    >
-      {children}
-    </button>
   );
 }

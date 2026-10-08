@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/lib/data";
+import { visibleMenu, type MenuItemId, type ScreenId } from "@/lib/menu";
 import {
   SPORT_ORDER,
   SPORT_PRESETS,
+  isCourseSport,
   isSoccerSport,
   slugifySport,
   sportEmoji,
@@ -21,15 +23,10 @@ import { PhotosTab } from "./tabs/PhotosTab";
 import { RestaurantsTab } from "./tabs/RestaurantsTab";
 import { TripsTab } from "./tabs/TripsTab";
 import { ConcertsTab } from "./tabs/ConcertsTab";
-
-const TABS = [
-  { id: "sports", label: "Sports" },
-  { id: "restaurants", label: "Restaurants" },
-  { id: "trips", label: "Trips" },
-  { id: "concerts", label: "Concerts" },
-] as const;
-
-type TabId = (typeof TABS)[number]["id"];
+import { MoviesTab } from "./tabs/MoviesTab";
+import { OtherEventsTab } from "./tabs/OtherEventsTab";
+import { PlacesTab } from "./tabs/PlacesTab";
+import { SettingsTab } from "./tabs/SettingsTab";
 
 const SPORT_TABS = [
   { id: "log", label: "Log Event" },
@@ -51,20 +48,31 @@ function tabsForSport(sport: Sport) {
 
 export function AppShell() {
   const { user, signOutUser, data } = useApp();
-  const [tab, setTab] = useState<TabId>("sports");
+  const [screen, setScreen] = useState<ScreenId>("sports");
   const [selectedSport, setSelectedSport] = useState<Sport | null>(null);
   const [sportTab, setSportTab] = useState<SportTabId>("log");
   const [adding, setAdding] = useState(false);
   const [customSport, setCustomSport] = useState("");
 
+  const menu = useMemo(() => visibleMenu(data.settings.hiddenMenu), [data.settings.hiddenMenu]);
+  // If the open screen gets switched off in Settings, fall back to the first one left.
+  const visibleIds = menu.flatMap((g) => g.items.map((i) => i.id as MenuItemId));
+  const tab: ScreenId =
+    screen === "settings" || visibleIds.includes(screen) ? screen : (visibleIds[0] ?? "settings");
+
   // Sports the user has actually logged, in display order (custom sports last).
+  // Golf & disc golf count courses played rather than games.
   const loggedSports = useMemo(() => {
     const counts = new Map<Sport, number>();
     for (const e of data.events) counts.set(e.sport, (counts.get(e.sport) ?? 0) + 1);
+    for (const p of data.places) {
+      if (p.tags.includes("course") && isCourseSport(p.courseType))
+        counts.set(p.courseType, (counts.get(p.courseType) ?? 0) + 1);
+    }
     const known = SPORT_ORDER.filter((s) => counts.has(s));
     const custom = [...counts.keys()].filter((s) => !SPORT_ORDER.includes(s)).sort();
     return [...known, ...custom].map((s) => ({ sport: s, count: counts.get(s) ?? 0 }));
-  }, [data.events]);
+  }, [data.events, data.places]);
 
   function openSport(sport: Sport) {
     setSelectedSport(sport);
@@ -84,7 +92,7 @@ export function AppShell() {
     const handle = () => {
       const m = window.location.hash.match(/^#log-event-(.+)$/);
       if (!m) return;
-      setTab("sports");
+      setScreen("sports");
       const ev = data.events.find((e) => e.id === m[1]);
       setSelectedSport(ev ? ev.sport : "soccer");
       setSportTab("log");
@@ -119,27 +127,33 @@ export function AppShell() {
         </div>
 
         <nav className="mx-auto max-w-5xl px-2 sm:px-4">
-          <div className="flex gap-1 overflow-x-auto pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-            {TABS.map((t) => {
-              const active = t.id === tab;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => {
-                    setTab(t.id);
-                    // Clicking the top-level Sports tab returns to the sport picker.
-                    if (t.id === "sports") setSelectedSport(null);
-                  }}
-                  className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-semibold transition ${
-                    active
-                      ? "bg-terracotta text-white shadow-[0_6px_14px_rgba(60,110,71,0.28)]"
-                      : "text-ink-soft hover:bg-paper-2 hover:text-ink"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
+          <div className="flex items-center gap-1 pb-2">
+            {menu.map((group, gi) => (
+              <MenuDropdown
+                key={group.id}
+                alignRight={gi > 0}
+                label={group.label}
+                items={group.items}
+                active={tab}
+                onPick={(id) => {
+                  setScreen(id);
+                  // Picking Sports from the menu returns to the sport picker.
+                  if (id === "sports") setSelectedSport(null);
+                }}
+              />
+            ))}
+            <button
+              onClick={() => setScreen("settings")}
+              aria-label="Settings"
+              title="Settings"
+              className={`ml-auto shrink-0 h-8 w-8 rounded-full text-base transition ${
+                tab === "settings"
+                  ? "bg-terracotta text-white"
+                  : "text-ink-soft hover:bg-paper-2 hover:text-ink"
+              }`}
+            >
+              ⚙
+            </button>
           </div>
         </nav>
       </header>
@@ -173,6 +187,10 @@ export function AppShell() {
                 </div>
               </div>
 
+              {isCourseSport(selectedSport) ? (
+                <PlacesTab tag="course" courseType={selectedSport} embedded />
+              ) : (
+              <>
               <div className="mb-6 flex justify-center sm:justify-start">
                 <div className="inline-flex flex-wrap gap-1 p-1 rounded-full bg-paper-2">
                   {availableSportTabs.map((t) => {
@@ -200,12 +218,108 @@ export function AppShell() {
               {activeSportTab === "players" && <PlayersTab sport={selectedSport} />}
               {activeSportTab === "teams" && <TeamsTab sport={selectedSport} />}
               {activeSportTab === "photos" && <PhotosTab sport={selectedSport} />}
+              </>
+              )}
             </>
           ))}
-        {tab === "restaurants" && <RestaurantsTab />}
-        {tab === "trips" && <TripsTab />}
         {tab === "concerts" && <ConcertsTab />}
+        {tab === "movies" && <MoviesTab />}
+        {tab === "other-events" && <OtherEventsTab />}
+        {tab === "courses" && <PlacesTab key="courses" tag="course" />}
+        {tab === "landmarks" && <PlacesTab key="landmarks" tag="landmark" />}
+        {tab === "parks" && <PlacesTab key="parks" tag="park" />}
+        {tab === "restaurants" && <RestaurantsTab />}
+        {tab === "vacation" && <TripsTab />}
+        {tab === "settings" && <SettingsTab />}
       </main>
+    </div>
+  );
+}
+
+/**
+ * A menu group ("Events", "Explore"). Shows the open item's name when one of
+ * its items is active, and lists the group's items in a popover.
+ */
+function MenuDropdown({
+  label,
+  items,
+  active,
+  onPick,
+  alignRight = false,
+}: {
+  label: string;
+  alignRight?: boolean; // keep the popover on-screen for groups further right on phones
+  items: readonly { id: MenuItemId; label: string; emoji: string }[];
+  active: ScreenId;
+  onPick: (id: MenuItemId) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = items.find((i) => i.id === active);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-semibold transition inline-flex items-center gap-1.5 ${
+          current
+            ? "bg-terracotta text-white shadow-[0_6px_14px_rgba(60,110,71,0.28)]"
+            : "text-ink-soft hover:bg-paper-2 hover:text-ink"
+        }`}
+      >
+        {label}
+        {current && (
+          <span className="font-normal opacity-90 max-w-[8.5rem] sm:max-w-none truncate">
+            · {current.label}
+          </span>
+        )}
+        <span className={`text-[10px] transition-transform ${open ? "rotate-180" : ""}`} aria-hidden>
+          ▼
+        </span>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className={`absolute top-full ${alignRight ? "right-0 sm:right-auto sm:left-0" : "left-0"} mt-1.5 z-40 min-w-52 card p-1.5 shadow-[var(--shadow-lift)]`}
+        >
+          {items.map((i) => (
+            <button
+              key={i.id}
+              role="menuitem"
+              onClick={() => {
+                onPick(i.id);
+                setOpen(false);
+              }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left transition ${
+                i.id === active
+                  ? "bg-terracotta-soft text-terracotta-dark font-semibold"
+                  : "text-ink hover:bg-paper-2"
+              }`}
+            >
+              <span className="text-base leading-none" aria-hidden>
+                {i.emoji}
+              </span>
+              {i.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -308,7 +422,8 @@ function SportPicker({
               <div className="min-w-0">
                 <p className="font-semibold text-ink truncate">{sportLabel(sport)}</p>
                 <p className="text-xs text-muted">
-                  {count} game{count === 1 ? "" : "s"} logged
+                  {count} {isCourseSport(sport) ? "course" : "game"}
+                  {count === 1 ? "" : "s"} logged
                 </p>
               </div>
             </button>

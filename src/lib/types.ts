@@ -88,10 +88,89 @@ export interface Restaurant {
 }
 
 // A stop/place within a trip — shown as an expandable sub-point under the trip.
+// Tagging a stop (landmark, park, course/trail) creates a linked Place, so it
+// also shows up in that Explore tab.
 export interface TripLocation {
   id: string;
   name: string; // e.g. "Kyoto" or "Fushimi Inari Shrine"
   notes: string; // details revealed when the location is expanded
+  placeId?: string; // -> Place.id when the stop is tagged
+}
+
+// ── Explore: courses & trails, landmarks, parks ─────────────────────────
+// One record can carry several tags and appears in every matching tab —
+// e.g. a state-park hiking trail tagged both "park" and "course".
+export type PlaceTag = "course" | "landmark" | "park";
+
+export const PLACE_TAGS: { id: PlaceTag; label: string; emoji: string }[] = [
+  { id: "course", label: "Course / Trail", emoji: "🥾" },
+  { id: "landmark", label: "Landmark", emoji: "🏛️" },
+  { id: "park", label: "Park", emoji: "🌳" },
+];
+
+// "" = a course/trail whose kind wasn't specified (e.g. tagged from a trip).
+export type CourseType = "golf" | "disc-golf" | "hiking" | "walking" | "biking" | "";
+
+export const COURSE_TYPES: { id: Exclude<CourseType, "">; label: string; emoji: string }[] = [
+  { id: "golf", label: "Golf", emoji: "⛳" },
+  { id: "disc-golf", label: "Disc Golf", emoji: "🥏" },
+  { id: "hiking", label: "Hiking", emoji: "🥾" },
+  { id: "walking", label: "Walking", emoji: "🚶" },
+  { id: "biking", label: "Biking", emoji: "🚴" },
+];
+
+/** Course types that are traced as a route on the map rather than a single pin. */
+export function isRouteType(t: CourseType): t is "hiking" | "walking" | "biking" {
+  return t === "hiking" || t === "walking" || t === "biking";
+}
+
+export interface Place {
+  id: string;
+  name: string;
+  tags: PlaceTag[];
+  courseType: CourseType; // only meaningful when tags include "course"
+  city: string;
+  country: string;
+  lat: number | null;
+  lng: number | null;
+  rating: number; // 0–5
+  date: string | null; // last visited (YYYY-MM-DD)
+  notes: string;
+  // Path actually travelled (walking/biking/hiking), Google-encoded polyline
+  // (precision 5). Encoded because Firestore can't store nested arrays and the
+  // whole user doc must stay under 1 MiB.
+  route: string;
+  tripId: string; // -> Trip.id when created from a tagged trip stop, else ""
+  createdAt: string;
+}
+
+// ── Events: movies & other ──────────────────────────────────────────────
+export interface Movie {
+  id: string;
+  title: string;
+  date: string | null;
+  theater: string;
+  city: string;
+  rating: number; // 0–5
+  notes: string;
+  createdAt: string;
+}
+
+export interface OtherEvent {
+  id: string;
+  name: string;
+  kind: string; // free text: "Comedy show", "Festival", "Theater"…
+  date: string | null;
+  venue: string;
+  city: string;
+  rating: number; // 0–5
+  notes: string;
+  createdAt: string;
+}
+
+// ── Settings ─────────────────────────────────────────────────────────────
+export interface Settings {
+  hiddenMenu: string[]; // MenuItemId values switched off in Settings
 }
 
 export interface Trip {
@@ -147,6 +226,10 @@ export interface UserData {
   restaurants: Restaurant[];
   trips: Trip[];
   concerts: Concert[];
+  places: Place[];
+  movies: Movie[];
+  otherEvents: OtherEvent[];
+  settings: Settings;
 }
 
 export const EMPTY_USER_DATA: UserData = {
@@ -158,6 +241,10 @@ export const EMPTY_USER_DATA: UserData = {
   restaurants: [],
   trips: [],
   concerts: [],
+  places: [],
+  movies: [],
+  otherEvents: [],
+  settings: { hiddenMenu: [] },
 };
 
 interface SportMeta {
@@ -178,6 +265,8 @@ const SPORT_META: Record<string, SportMeta> = {
   tennis: { label: "Tennis", short: "Tennis", emoji: "🎾" },
   rugby: { label: "Rugby", short: "Rugby", emoji: "🏉" },
   mma: { label: "MMA / Boxing", short: "MMA", emoji: "🥊" },
+  golf: { label: "Golf", short: "Golf", emoji: "⛳" },
+  "disc-golf": { label: "Disc Golf", short: "Disc Golf", emoji: "🥏" },
   "college-soccer": { label: "College Soccer", short: "College Soccer", emoji: "⚽" },
   "college-basketball": { label: "College Basketball", short: "College Hoops", emoji: "🏀" },
   "college-baseball": { label: "College Baseball", short: "College Baseball", emoji: "⚾" },
@@ -197,6 +286,8 @@ export const SPORT_PRESETS: Sport[] = [
   "tennis",
   "rugby",
   "mma",
+  "golf",
+  "disc-golf",
   "college-soccer",
   "college-basketball",
   "college-football",
@@ -227,6 +318,14 @@ export function sportEmoji(id: Sport): string {
 /** Soccer-family sports get the extra soccer-only form sections + API auto-fill. */
 export function isSoccerSport(id: Sport): boolean {
   return id === "soccer" || id === "college-soccer";
+}
+/**
+ * Golf & disc golf are played on courses, not watched as games: picking one
+ * opens a log of courses (Places tagged "course" of that type) instead of the
+ * Log Event form.
+ */
+export function isCourseSport(id: Sport): id is "golf" | "disc-golf" {
+  return id === "golf" || id === "disc-golf";
 }
 /** Normalize free-text sport input into an id: "College Baseball" -> "college-baseball". */
 export function slugifySport(input: string): Sport {

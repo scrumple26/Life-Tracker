@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { newId, useApp } from "@/lib/data";
-import { geocode } from "@/lib/geo";
-import type { Trip, TripLocation } from "@/lib/types";
+import { geocode, geocodeFirst } from "@/lib/geo";
+import { PLACE_TAGS, type Place, type PlaceTag, type Trip, type TripLocation } from "@/lib/types";
 import { Stars } from "../Stars";
+import { FilterChip } from "../FilterChip";
 import { MapPanel, type MapMarker } from "../Map";
 
 function emptyDraft(): Trip {
@@ -32,8 +33,11 @@ function fmtRange(t: Trip): string {
 }
 
 export function TripsTab() {
-  const { data, saveField } = useApp();
+  const { data, saveFields } = useApp();
   const [draft, setDraft] = useState<Trip | null>(null);
+  // Tags per stop being edited (keyed by TripLocation.id). Tagged stops are
+  // saved as Places so they also appear under Landmarks / Parks / Courses.
+  const [locTags, setLocTags] = useState<Record<string, PlaceTag[]>>({});
   const [view, setView] = useState<"list" | "map">("list");
   const [highlightText, setHighlightText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -55,18 +59,83 @@ export function TripsTab() {
           lat: t.lat as number,
           lng: t.lng as number,
           title: t.name || [t.city, t.country].filter(Boolean).join(", "),
+          count: 1,
           lines: [[t.city, t.country].filter(Boolean).join(", "), fmtRange(t)].filter(Boolean),
         })),
     [trips]
   );
 
+  const placeById = useMemo(() => new Map(data.places.map((p) => [p.id, p])), [data.places]);
+
   function startEdit(t: Trip) {
     setDraft(t);
     setHighlightText(t.highlights.join("\n"));
+    const tags: Record<string, PlaceTag[]> = {};
+    for (const l of t.locations) {
+      const p = l.placeId ? placeById.get(l.placeId) : undefined;
+      if (p) tags[l.id] = p.tags;
+    }
+    setLocTags(tags);
   }
   function startNew() {
     setDraft(emptyDraft());
     setHighlightText("");
+    setLocTags({});
+  }
+
+  function toggleLocTag(locId: string, tag: PlaceTag) {
+    setLocTags((m) => {
+      const cur = m[locId] ?? [];
+      return { ...m, [locId]: cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag] };
+    });
+  }
+
+  // Create/update/remove the Places behind tagged stops. Returns the stops
+  // (with placeId set or cleared) and the new places list.
+  async function syncTaggedStops(trip: Trip): Promise<{ locations: TripLocation[]; places: Place[] }> {
+    let places = [...data.places];
+    const locations: TripLocation[] = [];
+    const where = [trip.city, trip.country].filter(Boolean).join(", ");
+    for (const l of trip.locations) {
+      const tags = locTags[l.id] ?? [];
+      const existing = l.placeId ? places.find((p) => p.id === l.placeId) : undefined;
+      if (!tags.length) {
+        // Untagged: drop the linked place (the stop itself stays on the trip).
+        if (existing) places = places.filter((p) => p.id !== existing.id);
+        locations.push({ id: l.id, name: l.name, notes: l.notes });
+        continue;
+      }
+      const place: Place = existing
+        ? { ...existing, name: l.name, notes: l.notes, tags, tripId: trip.id }
+        : {
+            id: newId(),
+            name: l.name,
+            tags,
+            courseType: "",
+            city: trip.city,
+            country: trip.country,
+            lat: null,
+            lng: null,
+            rating: 0,
+            date: trip.startDate,
+            notes: l.notes,
+            route: "",
+            tripId: trip.id,
+            createdAt: new Date().toISOString(),
+          };
+      if (place.lat == null || place.lng == null) {
+        const coords = await geocodeFirst([[l.name, where].filter(Boolean).join(", "), l.name]);
+        if (coords) Object.assign(place, coords);
+      }
+      places = existing ? places.map((p) => (p.id === place.id ? place : p)) : [...places, place];
+      locations.push({ ...l, placeId: place.id });
+    }
+    // Stops removed from the trip entirely: unlink their places.
+    const kept = new Set(locations.map((l) => l.placeId).filter(Boolean));
+    places = places.map((p) =>
+      p.tripId === trip.id && !kept.has(p.id) ? { ...p, tripId: "" } : p
+    );
+    return { locations, places };
   }
 
   function addLocation() {
@@ -113,26 +182,32 @@ export function TripsTab() {
           }
         }
       }
+      const { locations, places } = await syncTaggedStops(rec);
+      rec.locations = locations;
       const exists = data.trips.some((t) => t.id === rec.id);
       const next = exists
         ? data.trips.map((t) => (t.id === rec.id ? rec : t))
         : [...data.trips, rec];
-      await saveField("trips", next);
+      await saveFields({ trips: next, places });
       setDraft(null);
     } finally {
       setBusy(false);
     }
   }
 
+  // Tagged stops live on as standalone landmarks/parks/courses.
   async function remove(id: string) {
-    await saveField("trips", data.trips.filter((t) => t.id !== id));
+    await saveFields({
+      trips: data.trips.filter((t) => t.id !== id),
+      places: data.places.map((p) => (p.tripId === id ? { ...p, tripId: "" } : p)),
+    });
   }
 
   return (
     <section className="lf-rise">
       <div className="flex items-start justify-between gap-3 mb-5 flex-wrap">
         <div>
-          <h2 className="text-4xl sm:text-5xl text-ink mb-2">Trips</h2>
+          <h2 className="text-4xl sm:text-5xl text-ink mb-2">Vacation</h2>
           <p className="text-ink-soft text-[15px]">
             Where you&apos;ve been, when, and what made each one worth it.
           </p>
@@ -207,7 +282,8 @@ export function TripsTab() {
             <div className="sm:col-span-2">
               <label className="field-label">Locations</label>
               <p className="text-xs text-muted -mt-1 mb-2">
-                Stops within this trip. Each expands to show its details.
+                Stops within this trip. Tag one as a landmark, park or course/trail and
+                it shows up in that Explore tab too.
               </p>
               {draft.locations.length > 0 && (
                 <div className="grid gap-2 mb-2">
@@ -234,6 +310,18 @@ export function TripsTab() {
                         value={l.notes}
                         onChange={(e) => updateLocation(l.id, { notes: e.target.value })}
                       />
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-xs text-muted mr-1">Also add to:</span>
+                        {PLACE_TAGS.map((t) => (
+                          <FilterChip
+                            key={t.id}
+                            active={(locTags[l.id] ?? []).includes(t.id)}
+                            onClick={() => toggleLocTag(l.id, t.id)}
+                          >
+                            {t.emoji} {t.label}
+                          </FilterChip>
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -323,7 +411,7 @@ export function TripsTab() {
                   ))}
                 </ul>
               )}
-              {t.locations.length > 0 && <TripLocations locations={t.locations} />}
+              {t.locations.length > 0 && <TripLocations locations={t.locations} places={placeById} />}
               {t.notes && <p className="text-sm text-ink-soft mt-2">{t.notes}</p>}
               <div className="flex items-center gap-3 mt-3 text-xs">
                 <button
@@ -345,7 +433,13 @@ export function TripsTab() {
 }
 
 /** Expandable sub-locations under a trip. Each row toggles open to show its details. */
-function TripLocations({ locations }: { locations: TripLocation[] }) {
+function TripLocations({
+  locations,
+  places,
+}: {
+  locations: TripLocation[];
+  places: Map<string, Place>;
+}) {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const toggle = (id: string) =>
     setOpen((prev) => {
@@ -378,6 +472,13 @@ function TripLocations({ locations }: { locations: TripLocation[] }) {
                   ▸
                 </span>
                 <span className="flex-1 truncate text-sm font-medium text-ink">{l.name}</span>
+                {PLACE_TAGS.filter((t) =>
+                  (l.placeId ? places.get(l.placeId)?.tags ?? [] : []).includes(t.id)
+                ).map((t) => (
+                  <span key={t.id} className="shrink-0 text-sm" title={t.label}>
+                    {t.emoji}
+                  </span>
+                ))}
                 <span className="shrink-0 text-xs text-muted">{isOpen ? "Hide" : "Details"}</span>
               </button>
               {isOpen && (

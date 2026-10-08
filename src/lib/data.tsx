@@ -20,9 +20,17 @@ import {
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import {
+  COURSE_TYPES,
   EMPTY_USER_DATA,
+  PLACE_TAGS,
   type Concert,
+  type CourseType,
+  type Movie,
+  type OtherEvent,
+  type Place,
+  type PlaceTag,
   type PlayerInfo,
+  type Settings,
   type RestCategory,
   type Restaurant,
   type SportEvent,
@@ -96,7 +104,63 @@ function normalizeRestaurant(r: Record<string, unknown>): Restaurant {
 }
 
 function normalizeTripLocation(l: Record<string, unknown>): TripLocation {
-  return { id: String(l.id), name: asStr(l.name), notes: asStr(l.notes) };
+  const loc: TripLocation = { id: String(l.id), name: asStr(l.name), notes: asStr(l.notes) };
+  if (asStr(l.placeId)) loc.placeId = asStr(l.placeId);
+  return loc;
+}
+
+const PLACE_TAG_IDS = new Set<string>(PLACE_TAGS.map((t) => t.id));
+const COURSE_TYPE_IDS = new Set<string>(COURSE_TYPES.map((t) => t.id));
+
+function normalizePlace(p: Record<string, unknown>): Place {
+  return {
+    id: String(p.id),
+    name: asStr(p.name),
+    tags: asStrArr(p.tags).filter((t): t is PlaceTag => PLACE_TAG_IDS.has(t)),
+    courseType: (COURSE_TYPE_IDS.has(asStr(p.courseType)) ? asStr(p.courseType) : "") as CourseType,
+    city: asStr(p.city),
+    country: asStr(p.country),
+    lat: asNum(p.lat),
+    lng: asNum(p.lng),
+    rating: asRating(p.rating),
+    date: asDate(p.date),
+    notes: asStr(p.notes),
+    route: asStr(p.route),
+    tripId: asStr(p.tripId),
+    createdAt: asStr(p.createdAt) || new Date().toISOString(),
+  };
+}
+
+function normalizeMovie(m: Record<string, unknown>): Movie {
+  return {
+    id: String(m.id),
+    title: asStr(m.title),
+    date: asDate(m.date),
+    theater: asStr(m.theater),
+    city: asStr(m.city),
+    rating: asRating(m.rating),
+    notes: asStr(m.notes),
+    createdAt: asStr(m.createdAt) || new Date().toISOString(),
+  };
+}
+
+function normalizeOtherEvent(o: Record<string, unknown>): OtherEvent {
+  return {
+    id: String(o.id),
+    name: asStr(o.name),
+    kind: asStr(o.kind),
+    date: asDate(o.date),
+    venue: asStr(o.venue),
+    city: asStr(o.city),
+    rating: asRating(o.rating),
+    notes: asStr(o.notes),
+    createdAt: asStr(o.createdAt) || new Date().toISOString(),
+  };
+}
+
+function normalizeSettings(raw: unknown): Settings {
+  const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return { hiddenMenu: asStrArr(o.hiddenMenu) };
 }
 
 function normalizeTrip(t: Record<string, unknown>): Trip {
@@ -203,6 +267,10 @@ function normalizeData(raw: Record<string, unknown> | undefined): UserData {
     restaurants: normalizeList(raw.restaurants, normalizeRestaurant),
     trips: normalizeList(raw.trips, normalizeTrip),
     concerts: normalizeList(raw.concerts, normalizeConcert),
+    places: normalizeList(raw.places, normalizePlace),
+    movies: normalizeList(raw.movies, normalizeMovie),
+    otherEvents: normalizeList(raw.otherEvents, normalizeOtherEvent),
+    settings: normalizeSettings(raw.settings),
   };
 }
 
@@ -222,6 +290,8 @@ interface AppContextValue {
   resetPassword: (email: string) => Promise<void>;
   // Persisters — write back to lifeTrackerData/{uid}, merge.
   saveField: <K extends keyof UserData>(field: K, value: UserData[K]) => Promise<void>;
+  // Several fields in one write — e.g. a trip and the places its tagged stops create.
+  saveFields: (fields: Partial<UserData>) => Promise<void>;
   saveEvents: (events: SportEvent[]) => Promise<void>;
 }
 
@@ -288,6 +358,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const ref = docRefForUser();
         if (!ref) return;
         await setDoc(ref, { [field]: value }, { merge: true });
+      },
+      saveFields: async (fields) => {
+        const ref = docRefForUser();
+        if (!ref) return;
+        await setDoc(ref, fields, { merge: true });
       },
       saveEvents: async (events) => {
         const ref = docRefForUser();
